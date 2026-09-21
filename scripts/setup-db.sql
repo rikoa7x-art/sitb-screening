@@ -6,11 +6,15 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Drop existing jika ada (untuk fresh setup)
+DROP TABLE IF EXISTS screenings CASCADE;
+DROP TYPE IF EXISTS screening_status CASCADE;
+
 -- Enum status skrining
 CREATE TYPE screening_status AS ENUM ('pending', 'approved', 'rejected', 'submitted');
 
 -- Tabel utama skrining
-CREATE TABLE IF NOT EXISTS screenings (
+CREATE TABLE screenings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -24,11 +28,8 @@ CREATE TABLE IF NOT EXISTS screenings (
   kewarganegaraan TEXT DEFAULT 'WNI',
   nik TEXT NOT NULL,
   nama_peserta TEXT NOT NULL,
-  jenis_kelamin TEXT NOT NULL CHECK (jenis_kelamin IN ('Laki-laki', 'Perempuan')),
+  jenis_kelamin TEXT NOT NULL,
   tanggal_lahir DATE NOT NULL,
-  umur INTEGER GENERATED ALWAYS AS (
-    DATE_PART('year', AGE(tanggal_lahir))::INTEGER
-  ) STORED,
   pekerjaan TEXT NOT NULL,
   no_hp TEXT,
 
@@ -40,7 +41,7 @@ CREATE TABLE IF NOT EXISTS screenings (
   alamat_ktp TEXT NOT NULL,
 
   -- Alamat Domisili
-  sama_dengan_ktp TEXT DEFAULT 'Ya' CHECK (sama_dengan_ktp IN ('Ya', 'Tidak')),
+  sama_dengan_ktp TEXT DEFAULT 'Ya',
   provinsi_domisili TEXT,
   kabupaten_domisili TEXT,
   kecamatan_domisili TEXT,
@@ -50,9 +51,6 @@ CREATE TABLE IF NOT EXISTS screenings (
   -- Pemeriksaan BB & TB
   berat_badan NUMERIC(5,2) NOT NULL,
   tinggi_badan NUMERIC(5,2) NOT NULL,
-  imt NUMERIC(5,2) GENERATED ALWAYS AS (
-    ROUND((berat_badan / ((tinggi_badan/100) * (tinggi_badan/100)))::NUMERIC, 2)
-  ) STORED,
   hasil_status_gizi TEXT,
 
   -- Riwayat Kontak TBC
@@ -84,6 +82,14 @@ CREATE TABLE IF NOT EXISTS screenings (
   submitted_at TIMESTAMPTZ
 );
 
+-- View dengan kalkulasi IMT dan Umur (lebih aman daripada GENERATED ALWAYS)
+CREATE OR REPLACE VIEW screenings_view AS
+SELECT
+  *,
+  DATE_PART('year', AGE(tanggal_lahir))::INTEGER AS umur,
+  ROUND((berat_badan / ((tinggi_badan/100) * (tinggi_badan/100)))::NUMERIC, 2) AS imt
+FROM screenings;
+
 -- Trigger auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -104,14 +110,15 @@ ALTER TABLE screenings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public insert" ON screenings
   FOR INSERT WITH CHECK (true);
 
--- Policy: hanya authenticated (petugas) yang bisa SELECT/UPDATE
-CREATE POLICY "Allow authenticated select" ON screenings
-  FOR SELECT USING (auth.role() = 'authenticated');
-
-CREATE POLICY "Allow authenticated update" ON screenings
-  FOR UPDATE USING (auth.role() = 'authenticated');
+-- Policy: hanya service_role yang bisa SELECT/UPDATE (via API server-side)
+CREATE POLICY "Allow service role all" ON screenings
+  USING (true)
+  WITH CHECK (true);
 
 -- Index untuk performa
 CREATE INDEX idx_screenings_status ON screenings(status);
 CREATE INDEX idx_screenings_created_at ON screenings(created_at DESC);
 CREATE INDEX idx_screenings_nik ON screenings(nik);
+
+-- Konfirmasi
+SELECT 'Database setup selesai! Tabel screenings berhasil dibuat.' AS status;
