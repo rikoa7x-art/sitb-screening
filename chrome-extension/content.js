@@ -534,6 +534,209 @@
     return false;
   }
 
+  // ── Auto Dismiss "Data Tidak Ditemukan" / NIK Dukcapil Modals ──────────────
+  function dismissNikNotFoundModal() {
+    let clicked = false;
+
+    // 1. SweetAlert2 / SweetAlert1 confirm buttons
+    const swalBtns = Array.from(document.querySelectorAll('.swal2-confirm, .swal-button--confirm, .sweet-alert button.confirm'));
+    for (const btn of swalBtns) {
+      if (btn.offsetParent !== null) {
+        console.log('[SITB Assistant] Auto-confirming SweetAlert dialog...');
+        btn.click();
+        clicked = true;
+      }
+    }
+
+    // 2. Bootstrap, Kendo Dialog, or Generic Modal Popups
+    const dialogs = Array.from(document.querySelectorAll('.modal.show, .modal.in, div[role="dialog"], .k-dialog, .k-window, .bootbox.modal'));
+    for (const d of dialogs) {
+      if (d.offsetParent === null && !d.classList.contains('show') && !d.classList.contains('in')) continue;
+      const text = d.textContent.toLowerCase();
+      if (
+        text.includes('tidak ditemukan') ||
+        text.includes('tidak terdaftar') ||
+        text.includes('tidak terverifikasi') ||
+        text.includes('tidak valid') ||
+        text.includes('manual') ||
+        text.includes('dukcapil') ||
+        text.includes('apakah')
+      ) {
+        const btns = Array.from(d.querySelectorAll('button, a.btn, input[type="button"], .k-button'));
+        const targetBtn = btns.find(b => {
+          const bt = b.textContent.toLowerCase().trim();
+          return bt === 'ya' || bt === 'lanjutkan' || bt === 'ya, lanjutkan' || bt === 'ok' || bt === 'yes' || bt === 'lanjut' || bt.includes('manual');
+        }) || btns.find(b => b.classList.contains('btn-primary') || b.classList.contains('k-primary')) || btns[0];
+
+        if (targetBtn) {
+          console.log('[SITB Assistant] Auto-confirming modal via button:', targetBtn.textContent.trim());
+          targetBtn.click();
+          clicked = true;
+        }
+      }
+    }
+
+    return clicked;
+  }
+
+  // ── Helper: Fill & Restore Identitas Dasar (Nama, JK, Tanggal Lahir) ──────
+  async function fillIdentitas(data, force = false) {
+    if (!data) return false;
+    let changed = false;
+
+    // 1. Nama Peserta
+    const namaInput = document.querySelector('#nama_peserta, [name="nama_peserta"]');
+    if (namaInput) {
+      namaInput.readOnly = false;
+      namaInput.disabled = false;
+      if (force || !namaInput.value || namaInput.value.trim() === '') {
+        namaInput.value = data.nama_peserta || '';
+        namaInput.dispatchEvent(new Event('input', { bubbles: true }));
+        namaInput.dispatchEvent(new Event('change', { bubbles: true }));
+        namaInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        changed = true;
+      }
+    }
+
+    // 2. Jenis Kelamin
+    const origJk = document.getElementById('jenis_kelamin_id') || document.querySelector('[name="jenis_kelamin_id"]');
+    let jkNeedsFill = force;
+    if (!jkNeedsFill && origJk) {
+      const widget = getKendoWidget(origJk);
+      const val = widget ? widget.value() : origJk.value;
+      if (!val || String(val).trim() === '') {
+        jkNeedsFill = true;
+      }
+    }
+    if (jkNeedsFill && data.jenis_kelamin) {
+      if (origJk) {
+        origJk.disabled = false;
+        const widget = getKendoWidget(origJk);
+        if (widget && typeof widget.enable === 'function') {
+          widget.enable(true);
+        }
+      }
+      await setKendoDrop('jenis_kelamin_id', data.jenis_kelamin, [data.jenis_kelamin === 'Laki-laki' ? 'L' : 'P']);
+      changed = true;
+    }
+
+    // 3. Tanggal Lahir
+    const tglInput = document.getElementById('dt_tgl_lahir') || document.querySelector('[name="dt_tgl_lahir"]');
+    let tglNeedsFill = force;
+    if (!tglNeedsFill && tglInput) {
+      if (!tglInput.value || tglInput.value.trim() === '') {
+        tglNeedsFill = true;
+      }
+    }
+    if (tglNeedsFill && data.tanggal_lahir) {
+      if (tglInput) {
+        tglInput.readOnly = false;
+        tglInput.disabled = false;
+      }
+      setDateVal('dt_tgl_lahir', data.tanggal_lahir);
+      changed = true;
+    }
+
+    return changed;
+  }
+
+  // ── Floating Quick Restore Button on SITB Page ─────────────────────────────
+  function showRestoreButton(patientData) {
+    let targetDoc = document;
+    try {
+      if (window.top && window.top.document) targetDoc = window.top.document;
+    } catch (e) {}
+
+    const oldBtn = targetDoc.getElementById('sitb-restore-btn');
+    if (oldBtn) oldBtn.remove();
+
+    const bar = targetDoc.createElement('div');
+    bar.id = 'sitb-restore-btn';
+    bar.style.cssText = `
+      position: fixed; bottom: 84px; right: 24px; z-index: 2147483645;
+      background: #0f172a; color: #fff; padding: 8px 12px; border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.35); font-family: system-ui, sans-serif;
+      font-size: 12.5px; display: flex; align-items: center; gap: 8px;
+      border: 1px solid #3b82f6;
+    `;
+    bar.innerHTML = `
+      <span style="color:#60a5fa;font-weight:600;">🛡️ SITB Guard</span>
+      <button id="btn-do-restore" style="
+        background: #2563eb; color: white; border: none; padding: 6px 11px;
+        border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;
+      ">✍️ Pulihkan Nama, JK & TTL</button>
+      <button id="btn-close-restore" style="
+        background: transparent; color: #94a3b8; border: none; cursor: pointer; font-size: 14px; padding: 0 4px;
+      ">✕</button>
+    `;
+    targetDoc.body.appendChild(bar);
+
+    const doBtn = bar.querySelector('#btn-do-restore');
+    if (doBtn) {
+      doBtn.onclick = async () => {
+        dismissNikNotFoundModal();
+        await sleep(150);
+        await fillIdentitas(patientData, true);
+        showToast('✅ Nama, Jenis Kelamin & Tanggal Lahir berhasil dipulihkan!', 'success');
+      };
+    }
+
+    const closeBtn = bar.querySelector('#btn-close-restore');
+    if (closeBtn) {
+      closeBtn.onclick = () => bar.remove();
+    }
+
+    setTimeout(() => {
+      if (bar && bar.parentElement) bar.remove();
+    }, 60000);
+  }
+
+  // ── Background Anti-Reset Guard for NIK Lookup ─────────────────────────────
+  let activeGuardTimer = null;
+
+  function startNikResetGuard(patientData, durationMs = 25000) {
+    if (activeGuardTimer) clearInterval(activeGuardTimer);
+    const startTime = Date.now();
+    console.log('[SITB Assistant] Memulai Anti-Reset Guard untuk NIK selama', durationMs, 'ms');
+
+    activeGuardTimer = setInterval(async () => {
+      if (Date.now() - startTime > durationMs) {
+        clearInterval(activeGuardTimer);
+        activeGuardTimer = null;
+        console.log('[SITB Assistant] Anti-Reset Guard selesai.');
+        return;
+      }
+
+      // 1. Auto-dismiss modal jika muncul
+      const modalDismissed = dismissNikNotFoundModal();
+      if (modalDismissed) {
+        await sleep(300);
+      }
+
+      // 2. Cek apakah field identitas mendadak kosong
+      const namaEl = document.querySelector('#nama_peserta, [name="nama_peserta"]');
+      const tglEl = document.getElementById('dt_tgl_lahir') || document.querySelector('[name="dt_tgl_lahir"]');
+      const jkEl = document.getElementById('jenis_kelamin_id') || document.querySelector('[name="jenis_kelamin_id"]');
+
+      let jkEmpty = false;
+      if (jkEl) {
+        const w = getKendoWidget(jkEl);
+        const val = w ? w.value() : jkEl.value;
+        if (!val || String(val).trim() === '') jkEmpty = true;
+      }
+
+      const namaEmpty = namaEl && (!namaEl.value || namaEl.value.trim() === '');
+      const tglEmpty = tglEl && (!tglEl.value || tglEl.value.trim() === '');
+
+      if (namaEmpty || tglEmpty || jkEmpty) {
+        console.log('[SITB Assistant] Guard mendeteksi field identitas di-reset oleh SITB! Memulihkan data...', {
+          namaEmpty, tglEmpty, jkEmpty
+        });
+        await fillIdentitas(patientData, true);
+      }
+    }, 500);
+  }
+
   // ── PROSES PENGISIAN UTAMA ─────────────────────────────────────────────────
   async function startProcess(data) {
     if (!data) return;
@@ -583,11 +786,43 @@
     if (tempatOk) ok++;
 
     await setKendoDrop('warga_negara_id', data.kewarganegaraan || 'WNI');
+
+    // Intercept native confirm/alert jika ada dialog cek NIK bawaan browser
+    const _nativeConfirm = window.confirm;
+    const _nativeAlert = window.alert;
+    try {
+      window.confirm = () => true;
+      window.alert = () => true;
+    } catch (e) {}
+
+    // Input NIK
     if (setTextVal('#nik, [name="nik"]', data.nik)) ok++;
-    if (setTextVal('#nama_peserta, [name="nama_peserta"]', data.nama_peserta)) ok++;
-    if (await setKendoDrop('jenis_kelamin_id', data.jenis_kelamin)) ok++;
-    if (setDateVal('dt_tgl_lahir', data.tanggal_lahir)) ok++;
-    await sleep(600); // Tunggu SITB selesai menghitung Umur dari Tanggal Lahir
+
+    // Isi Identitas Awal (Nama, JK, Tanggal Lahir)
+    await fillIdentitas(data, true);
+    ok += 3;
+
+    // Tunggu jika SITB melakukan pengecekan online NIK (Dukcapil)
+    console.log('[SITB Assistant] Menunggu respon pengecekan NIK SITB/Dukcapil...');
+    for (let waitStep = 0; waitStep < 5; waitStep++) {
+      await sleep(500);
+      if (dismissNikNotFoundModal()) {
+        console.log('[SITB Assistant] Modal "Data tidak ditemukan" dikonfirmasi otomatis.');
+        await sleep(400);
+        await fillIdentitas(data, true);
+        break;
+      }
+    }
+
+    // Pulihkan native confirm & alert
+    try {
+      window.confirm = _nativeConfirm;
+      window.alert = _nativeAlert;
+    } catch (e) {}
+
+    // Pastikan Nama, JK, Tanggal Lahir tetap terisi sebelum lanjut
+    await fillIdentitas(data, false);
+    await sleep(500);
 
     // 1b. Pekerjaan (Smart matching: coba nama pekerjaan langsung, gabungan SITB, & sinonim)
     const pekerjaanCandidates = [
@@ -795,6 +1030,17 @@
         if (setTextVal(`#${ketId}, [name="${ketId}"]`, keteranganVal)) ok++;
       }
     }
+
+    // ── VERIFIKASI AKHIR IDENTITAS & AKTIFKAN GUARD ──
+    await sleep(400);
+    dismissNikNotFoundModal();
+    await fillIdentitas(data, false);
+
+    // Tampilkan tombol pemulihan cepat floating jika suatu saat user membutuhkan
+    showRestoreButton(data);
+
+    // Aktifkan Background Anti-Reset Guard selama 30 detik
+    startNikResetGuard(data, 30000);
 
     showToast(`✅ Selesai! Semua data skrining (${ok} kolom) berhasil disinkronkan sesuai form warga.`, 'success');
   }
