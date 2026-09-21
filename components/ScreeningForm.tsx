@@ -31,6 +31,13 @@ export default function ScreeningForm() {
       kewarganegaraan: 'WNI',
       sama_dengan_ktp: 'Ya',
       tanggal_skrining: new Date().toISOString().split('T')[0],
+      provinsi_ktp: 'Jawa Barat',
+      kabupaten_ktp: 'Kabupaten Subang',
+      kecamatan_ktp: 'Cijambe',
+      hasil_skrining: 'Bukan Suspek TBC',
+      dilakukan_cxr: 'Tidak',
+      terduga_tbc: 'Tidak',
+      keterangan: 'Tracing TB 2026',
     },
     mode: 'onChange',
   })
@@ -41,11 +48,11 @@ export default function ScreeningForm() {
     // Step 1
     ['tanggal_skrining', 'tempat_skrining', 'nik', 'nama_peserta', 'jenis_kelamin', 'tanggal_lahir', 'pekerjaan'],
     // Step 2
-    ['provinsi_ktp', 'kabupaten_ktp', 'alamat_ktp'],
+    ['provinsi_ktp', 'kabupaten_ktp', 'kecamatan_ktp', 'kelurahan_ktp', 'alamat_ktp'],
     // Step 3
     ['berat_badan', 'tinggi_badan', 'riwayat_kontak_tbc', 'pernah_tbc', 'kekurangan_gizi', 'merokok', 'riwayat_dm', 'odha'],
     // Step 4
-    ['batuk', 'bb_turun', 'demam', 'berkeringat', 'pembesaran_kelenjar', 'hasil_skrining', 'dilakukan_cxr'],
+    ['batuk', 'bb_turun', 'demam', 'berkeringat', 'pembesaran_kelenjar'],
   ]
 
   const nextStep = async () => {
@@ -59,10 +66,21 @@ export default function ScreeningForm() {
     setLoading(true)
     setError('')
     try {
+      const hasSymptoms = ['batuk', 'bb_turun', 'demam', 'berkeringat', 'pembesaran_kelenjar'].some(
+        f => (data as any)[f] === 'Ada'
+      )
+      const payload: ScreeningFormData = {
+        ...data,
+        hasil_skrining: data.hasil_skrining || (hasSymptoms ? 'Suspek TBC' : 'Bukan Suspek TBC'),
+        dilakukan_cxr: data.dilakukan_cxr || 'Tidak',
+        terduga_tbc: data.terduga_tbc || (hasSymptoms ? 'Ya' : 'Tidak'),
+        keterangan: data.keterangan || 'Tracing TB 2026',
+      }
+
       const res = await fetch('/api/screening', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         const body = await res.json()

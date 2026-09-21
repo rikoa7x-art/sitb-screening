@@ -72,7 +72,8 @@ export interface Screening {
   dilakukan_cxr: string
   terduga_tbc: string
 
-  // Admin
+  // Admin & Keterangan
+  keterangan?: string
   catatan_petugas?: string
   approved_by?: string
   approved_at?: string

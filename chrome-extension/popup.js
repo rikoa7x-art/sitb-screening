@@ -62,17 +62,22 @@ async function fillForm(patientData) {
       return;
     }
     
-    // Simpan data pasien ke storage lokal agar content.js di semua frame bisa membacanya
-    await chrome.storage.local.set({ activePatient: patientData });
-
-    // Eksekusi content.js ke semua frame
+    // Step 1: Expose data ke MAIN world via global variable
+    // (content.js di ISOLATED_WORLD tidak bisa akses window.$, jQuery, atau Kendo API)
     await chrome.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
-      files: ['content.js']
+      func: (data) => { window.__sitbPatient__ = data; },
+      args: [patientData],
+      world: 'MAIN'
     });
 
-    // Kirim juga pesan langsung sebagai fallback
-    chrome.tabs.sendMessage(tab.id, { action: 'FILL_DATA', data: patientData }).catch(() => {});
+    // Step 2: Jalankan content.js di MAIN world agar bisa pakai jQuery/Kendo API
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id, allFrames: true },
+      files: ['content.js'],
+      world: 'MAIN'
+    });
+
   } catch (err) {
     alert('Gagal menyalin data: ' + err.message);
   }
@@ -109,3 +114,17 @@ async function markDone(id) {
 
 // Init
 fetchData();
+
+// Tombol Diagnostik - inject diagnostic.js ke semua frame
+document.getElementById('btn-diagnostic').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) {
+    alert('Tidak ada tab aktif!');
+    return;
+  }
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id, allFrames: true },
+    files: ['diagnostic.js']
+  });
+  window.close(); // Tutup popup agar panel diagnostik terlihat
+});

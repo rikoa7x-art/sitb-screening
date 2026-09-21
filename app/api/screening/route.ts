@@ -18,19 +18,33 @@ export async function POST(req: NextRequest) {
     const data = parsed.data
     const db = supabaseAdmin()
 
-    // Simpan ke Supabase
-    const { data: inserted, error } = await db
+    // Simpan ke Supabase (dengan fallback aman jika kolom 'keterangan' belum ada di DB)
+    const dbPayload: Record<string, any> = {
+      ...data,
+      status: 'pending',
+      unit_pelaksana: 'Puskesmas Tanjungwangi',
+      nama_kegiatan: 'Skrining Oleh Fasyankes',
+      catatan_petugas: (data as any).catatan_petugas || data.keterangan || 'Tracing TB 2026',
+    }
+
+    let { data: inserted, error } = await db
       .from('screenings')
-      .insert([{
-        ...data,
-        status: 'pending',
-        unit_pelaksana: 'Puskesmas Tanjungwangi',
-        nama_kegiatan: 'Skrining Oleh Fasyankes',
-      }])
+      .insert([dbPayload])
       .select('id')
       .single()
 
-    if (error) {
+    if (error && error.message?.includes('keterangan')) {
+      delete dbPayload.keterangan
+      const retry = await db
+        .from('screenings')
+        .insert([dbPayload])
+        .select('id')
+        .single()
+      inserted = retry.data
+      error = retry.error
+    }
+
+    if (error || !inserted) {
       console.error('Supabase error:', error)
       return NextResponse.json({ error: 'Gagal menyimpan data' }, { status: 500 })
     }

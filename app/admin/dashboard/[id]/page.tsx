@@ -139,6 +139,7 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
               <DataRow label="Hasil Skrining" value={data.hasil_skrining} />
               <DataRow label="Dilakukan CXR" value={data.dilakukan_cxr} />
               <DataRow label="Terduga TBC" value={data.terduga_tbc} />
+              <DataRow label="Keterangan" value={data.keterangan || data.catatan_petugas || 'Tracing TB 2026'} />
             </div>
           </div>
 

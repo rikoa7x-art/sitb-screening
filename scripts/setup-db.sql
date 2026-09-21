@@ -75,7 +75,8 @@ CREATE TABLE screenings (
   dilakukan_cxr TEXT NOT NULL,
   terduga_tbc TEXT,
 
-  -- Metadata admin
+  -- Keterangan & Metadata admin
+  keterangan TEXT DEFAULT 'Tracing TB 2026',
   catatan_petugas TEXT,
   approved_by TEXT,
   approved_at TIMESTAMPTZ,

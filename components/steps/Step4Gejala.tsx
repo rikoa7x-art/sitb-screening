@@ -2,7 +2,6 @@
 
 import { useFormContext } from 'react-hook-form'
 import type { ScreeningFormData } from '@/lib/validations'
-import { OPSI_HASIL_SKRINING, OPSI_CXR, OPSI_TERDUGA_TBC } from '@/lib/validations'
 import FormField from '../FormField'
 import RadioGroup from '../RadioGroup'
 
@@ -15,11 +14,11 @@ const GEJALA_LIST = [
 ]
 
 export default function Step4Gejala() {
-  const { register, watch, formState: { errors } } = useFormContext<ScreeningFormData>()
+  const { register, formState: { errors } } = useFormContext<ScreeningFormData>()
 
   return (
     <div>
-      <h2 className="text-lg font-bold text-blue-800 mb-1">Skrining Gejala & Hasil</h2>
+      <h2 className="text-lg font-bold text-blue-800 mb-1">Skrining Gejala</h2>
       <p className="text-sm text-gray-500 mb-5">Jawab pertanyaan gejala dengan jujur berdasarkan kondisi Anda.</p>
 
       <div className="space-y-4">
@@ -39,32 +38,15 @@ export default function Step4Gejala() {
           ))}
         </div>
 
-        {/* Hasil Skrining */}
+        {/* Keterangan */}
         <div className="border-t border-gray-200 pt-4">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
-            <p className="text-sm font-semibold text-green-800">📋 Hasil Skrining</p>
-            <p className="text-xs text-green-700 mt-1">Bagian ini akan diisi oleh petugas kesehatan</p>
-          </div>
-
-          <FormField label="Hasil Skrining Gejala dan Tanda TBC" required error={errors.hasil_skrining?.message}>
-            <select {...register('hasil_skrining')} className="form-select">
-              <option value="">-- Pilih --</option>
-              {OPSI_HASIL_SKRINING.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </FormField>
-
-          <FormField label="Dilakukan Pemeriksaan Chest X-Ray (CXR)?" required error={errors.dilakukan_cxr?.message}>
-            <select {...register('dilakukan_cxr')} className="form-select">
-              <option value="">-- Pilih --</option>
-              {OPSI_CXR.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </FormField>
-
-          <FormField label="Terduga TBC" error={errors.terduga_tbc?.message}>
-            <select {...register('terduga_tbc')} className="form-select">
-              <option value="">-- Pilih --</option>
-              {OPSI_TERDUGA_TBC.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
+          <FormField label="Keterangan" error={errors.keterangan?.message}>
+            <input
+              type="text"
+              {...register('keterangan')}
+              className="form-input"
+              placeholder="Tracing TB 2026"
+            />
           </FormField>
         </div>
 

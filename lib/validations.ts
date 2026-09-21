@@ -17,10 +17,10 @@ export const screeningSchema = z.object({
   no_hp: z.string().optional(),
 
   // Step 2 - Alamat
-  provinsi_ktp: z.string().min(1, 'Provinsi wajib diisi'),
-  kabupaten_ktp: z.string().min(1, 'Kabupaten/Kota wajib diisi'),
-  kecamatan_ktp: z.string().optional(),
-  kelurahan_ktp: z.string().optional(),
+  provinsi_ktp: z.string().default('Jawa Barat'),
+  kabupaten_ktp: z.string().default('Kabupaten Subang'),
+  kecamatan_ktp: z.string().default('Cijambe'),
+  kelurahan_ktp: z.string().min(1, 'Kelurahan / Desa wajib dipilih'),
   alamat_ktp: z.string().min(5, 'Alamat lengkap wajib diisi'),
   sama_dengan_ktp: z.enum(['Ya', 'Tidak']).default('Ya'),
   provinsi_domisili: z.string().optional(),
@@ -46,14 +46,31 @@ export const screeningSchema = z.object({
   demam: z.string().min(1, 'Wajib diisi'),
   berkeringat: z.string().min(1, 'Wajib diisi'),
   pembesaran_kelenjar: z.string().min(1, 'Wajib diisi'),
-  hasil_skrining: z.string().min(1, 'Wajib diisi'),
-  dilakukan_cxr: z.string().min(1, 'Wajib diisi'),
-  terduga_tbc: z.string().optional(),
+  hasil_skrining: z.string().optional().default('Bukan Suspek TBC'),
+  dilakukan_cxr: z.string().optional().default('Tidak'),
+  terduga_tbc: z.string().optional().default('Tidak'),
+  keterangan: z.string().optional().default('Tracing TB 2026'),
 })
 
 export type ScreeningFormData = z.infer<typeof screeningSchema>
 
-// Opsi dropdown
+// Opsi dropdown 5 Desa di Wilayah Kerja Puskesmas Tanjungwangi
+export const OPSI_DESA = [
+  'Desa Tanjungwangi',
+  'Desa Gunung Tua',
+  'Desa Cijambe',
+  'Desa Bantarsari',
+  'Desa Sukahurip',
+] as const
+
+export const OPSI_TEMPAT = [
+  'Desa Tanjungwangi',
+  'Desa Gunung Tua',
+  'Desa Cijambe',
+  'Desa Bantarsari',
+  'Desa Sukahurip',
+] as const
+
 export const OPSI_PEKERJAAN = [
   'Tidak Bekerja', 'Petani/Pekebun', 'Nelayan', 'Pedagang',
   'Pegawai Negeri Sipil', 'TNI/Polri', 'Pegawai Swasta',
@@ -78,11 +95,6 @@ export const OPSI_CXR = ['Ya', 'Tidak']
 export const OPSI_TERDUGA_TBC = ['Ya', 'Tidak', 'Tidak Dapat Dinilai']
 
 export const OPSI_KONTAK = ['Ya', 'Tidak', 'Tidak Diketahui']
-
-export const OPSI_TEMPAT = [
-  'Puskesmas', 'Posyandu', 'Posbindu', 'Rumah Warga',
-  'Tempat Kerja', 'Sekolah', 'Pesantren', 'Lapas/Rutan', 'Lainnya'
-]
 
 export const PROVINSI_LIST = [
   'Aceh', 'Bali', 'Banten', 'Bengkulu', 'DI Yogyakarta', 'DKI Jakarta',
