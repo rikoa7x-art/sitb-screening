@@ -3,122 +3,149 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'FILL_DATA') {
     const data = request.data;
     
-    // === HELPER PENGISIAN ===
-    const smartFill = (keywords, value, isDropdown = false) => {
+    // Fungsi pintar untuk membaca teks/label di sebelah sebuah kotak input
+    const getLabelTextForInput = (input) => {
+      let text = '';
+      
+      // 1. Cek bungkus bawaan ExtJS (SITB sering pakai ini)
+      const xFormItem = input.closest('.x-form-item');
+      if (xFormItem) {
+        const lbl = xFormItem.querySelector('.x-form-item-label');
+        if (lbl) text += lbl.textContent + ' ';
+      }
+      
+      // 2. Cek baris tabel (<tr>) jika form menggunakan tabel
+      const tr = input.closest('tr');
+      if (tr) {
+        const clone = tr.cloneNode(true);
+        // Hapus elemen input dari bayangan tabel agar kita cuma dapat teks labelnya
+        clone.querySelectorAll('input, select, textarea').forEach(e => e.remove());
+        text += clone.textContent + ' ';
+      }
+      
+      // 3. Cek tag <label> resmi
+      if (input.id) {
+        const lbl = document.querySelector(`label[for="${input.id}"]`);
+        if (lbl) text += lbl.textContent + ' ';
+      }
+
+      return text.toLowerCase();
+    };
+
+    // Fungsi utama pencari dan pengisi form
+    const smartFill = (labelKeywords, nameKeywords, value, isDropdown = false) => {
       if (!value) return false;
       
-      // Ambil SEMUA elemen, termasuk yang disembunyikan (hidden) oleh SITB
-      const elements = document.querySelectorAll('input, select, textarea');
+      // Ambil seluruh kotak input yang terlihat di layar
+      const inputs = document.querySelectorAll('input:not([type="hidden"]), select, textarea');
       
-      for (let el of elements) {
-        const name = (el.name || '').toLowerCase();
-        const id = (el.id || '').toLowerCase();
-        const placeholder = (el.placeholder || '').toLowerCase();
+      for (const input of inputs) {
+        if (input.disabled) continue; // Lewati jika kotak dimatikan (disabled)
         
-        if (keywords.some(kw => name.includes(kw) || id.includes(kw) || placeholder.includes(kw))) {
+        const name = (input.name || '').toLowerCase();
+        const id = (input.id || '').toLowerCase();
+        const labelText = getLabelTextForInput(input);
+        
+        // Cocokkan teks label di sebelah kotak, ATAU nama tersembunyi kotaknya
+        if (labelKeywords.some(kw => labelText.includes(kw)) || 
+            nameKeywords.some(kw => name.includes(kw) || id.includes(kw))) {
           
-          // Jika ini adalah kolom 'hidden' (disembunyikan oleh sistem ExtJS SITB),
-          // maka kita harus mencari kolom visualnya (yang terlihat di layar) di sebelahnya
-          if (el.type === 'hidden') {
-            const visibleSibling = el.parentElement.querySelector('input:not([type="hidden"]), select');
-            if (visibleSibling) {
-              el = visibleSibling; // Pindahkan target ke kolom yang terlihat
-            } else {
-              continue; // Kalau tidak ada, lewati
-            }
-          }
-
-          // Lewati jika kolom sudah terisi (jangan ditimpa)
-          if (el.value && el.value !== '' && el.value !== '-- Pilih --' && el.value !== 'Pilih') {
+          // Lewati jika sudah terisi (jangan ditimpa)
+          if (input.value && input.value !== '' && input.value !== '-- Pilih --' && input.value !== 'Pilih') {
              continue; 
           }
 
-          if (el.tagName === 'SELECT') {
-            for (let i = 0; i < el.options.length; i++) {
-              if (el.options[i].text.toLowerCase().includes(value.toLowerCase()) || 
-                  el.options[i].value.toLowerCase() === value.toLowerCase()) {
-                el.selectedIndex = i;
-                el.dispatchEvent(new Event('change', { bubbles: true }));
+          if (input.tagName === 'SELECT') {
+            for (let i = 0; i < input.options.length; i++) {
+              if (input.options[i].text.toLowerCase().includes(value.toLowerCase()) || 
+                  input.options[i].value.toLowerCase() === value.toLowerCase()) {
+                input.selectedIndex = i;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
                 return true;
               }
             }
           } else {
             // Input Text biasa atau Custom Dropdown SITB
-            el.focus();
-            el.value = value;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
+            input.focus();
+            input.value = value;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
             
             if (isDropdown) {
-              // Beri jeda 600ms untuk loading, lalu Enter (TANPA tekan bawah agar tidak meleset)
+              // Simulasikan menekan tombol Enter pada ExtJS combobox
               setTimeout(() => {
-                el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', keyCode: 13 }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-                el.blur();
-              }, 600);
+                input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', keyCode: 13, which: 13 }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                input.blur();
+              }, 800);
             } else {
-              el.dispatchEvent(new Event('change', { bubbles: true }));
-              el.blur();
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+              input.blur();
             }
-            return true;
+            return true; // Berhasil diisi, berhenti mencari kolom untuk data ini
           }
         }
       }
       return false;
     };
 
-    // --- PEMETAAN KOLOM (Menggunakan nama internal SITB) ---
+    // --- PEMETAAN KOLOM (Berdasarkan tulisan yang terlihat di layar SITB) ---
     
     // Identitas
-    smartFill(['tgl_skrining', 'tanggalskrining', 'pelaksanaan'], data.tanggal_skrining, false);
-    smartFill(['tempat'], data.tempat_skrining, true);
-    smartFill(['warga', 'kewarganegaraan'], data.kewarganegaraan, true);
-    smartFill(['nik', 'no_identitas'], data.nik, false);
-    smartFill(['nama', 'nm_pasien', 'namapasien', 'peserta'], data.nama_peserta, false);
-    smartFill(['kelamin', 'jk', 'gender'], data.jenis_kelamin, true);
-    smartFill(['tgl_lahir', 'tanggallahir', 'tanggal_lahir'], data.tanggal_lahir, false);
-    smartFill(['kerja', 'pekerjaan'], data.pekerjaan, true);
+    smartFill(['tanggal pelaksanaan', 'tanggal skrining'], ['tgl_skrining'], data.tanggal_skrining, false);
+    smartFill(['tempat skrining'], ['tempat'], data.tempat_skrining, true);
+    smartFill(['kewarganegaraan'], ['warga'], data.kewarganegaraan, true);
+    smartFill(['nik'], ['nik'], data.nik, false);
+    smartFill(['nama peserta'], ['nama'], data.nama_peserta, false);
+    smartFill(['jenis kelamin'], ['kelamin', 'jk'], data.jenis_kelamin, true);
+    smartFill(['tanggal lahir'], ['tgl_lahir', 'lahir'], data.tanggal_lahir, false);
+    smartFill(['pekerjaan'], ['kerja'], data.pekerjaan, true);
     
     // Alamat & Kontak
-    smartFill(['alamat'], data.alamat_ktp, false);
-    smartFill(['hp', 'telp', 'telepon'], data.no_hp, false);
+    smartFill(['alamat ktp', 'alamat'], ['alamat'], data.alamat_ktp, false);
+    smartFill(['no. hp', 'no hp', 'telepon'], ['hp', 'telp'], data.no_hp, false);
     
     // Fisik
-    smartFill(['berat', 'bb', 'weight', 'kg'], data.berat_badan, false);
-    smartFill(['tinggi', 'tb', 'height', 'cm', 'panjang'], data.tinggi_badan, false);
+    smartFill(['berat badan'], ['berat', 'bb'], data.berat_badan, false);
+    smartFill(['tinggi badan', 'panjang badan'], ['tinggi', 'tb'], data.tinggi_badan, false);
 
     // Riwayat
-    smartFill(['kontak', 'riwayat_kontak'], data.riwayat_kontak_tbc, true);
-    smartFill(['pernah_tbc', 'berobat', 'diagnosa'], data.pernah_tbc, true);
-    smartFill(['gizi', 'kekurangan'], data.kekurangan_gizi, true);
-    smartFill(['rokok', 'merokok'], data.merokok, true);
-    smartFill(['dm', 'manis', 'kencing'], data.riwayat_dm, true);
-    smartFill(['hiv', 'odha'], data.odha, true);
+    smartFill(['riwayat kontak'], ['kontak'], data.riwayat_kontak_tbc, true);
+    smartFill(['pernah terdiagnosa', 'berobat tbc'], ['pernah_tbc'], data.pernah_tbc, true);
+    smartFill(['kekurangan gizi'], ['gizi'], data.kekurangan_gizi, true);
+    smartFill(['merokok'], ['rokok'], data.merokok, true);
+    smartFill(['riwayat dm', 'kencing manis'], ['dm', 'manis'], data.riwayat_dm, true);
+    smartFill(['orang dengan hiv'], ['hiv', 'odha'], data.odha, true);
 
     // Gejala
-    smartFill(['batuk'], data.batuk, true);
-    smartFill(['bb_turun', 'nafsu'], data.bb_turun, true);
-    smartFill(['demam'], data.demam, true);
-    smartFill(['keringat', 'malam'], data.berkeringat, true);
-    smartFill(['kelenjar', 'getah', 'pembesaran'], data.pembesaran_kelenjar, true);
+    smartFill(['batuk'], ['batuk'], data.batuk, true);
+    smartFill(['bb turun', 'nafsu makan turun'], ['bb_turun', 'nafsu'], data.bb_turun, true);
+    smartFill(['demam hilang'], ['demam'], data.demam, true);
+    smartFill(['berkeringat malam'], ['keringat'], data.berkeringat, true);
+    smartFill(['pembesaran kelenjar', 'getah bening'], ['kelenjar', 'getah'], data.pembesaran_kelenjar, true);
 
     // Hasil
-    smartFill(['hasil_skrining', 'hasil'], data.hasil_skrining, true);
-    smartFill(['cxr', 'xray'], data.dilakukan_cxr, true);
-    smartFill(['terduga'], data.terduga_tbc, true);
+    smartFill(['hasil skrining gejala'], ['hasil_skrining'], data.hasil_skrining, true);
+    smartFill(['dilakukan pemeriksaan cxr'], ['cxr', 'xray'], data.dilakukan_cxr, true);
+    smartFill(['terduga tbc'], ['terduga'], data.terduga_tbc, true);
+    
+    // Bonus: Otomatis pilih alasan tidak CXR jika cxr = Tidak
+    if(data.dilakukan_cxr === 'Tidak') {
+      smartFill(['alasan tidak cxr'], [], 'Tidak', true);
+    }
 
-    // Alamat Dropdown (Berjenjang)
-    smartFill(['provinsi', 'propinsi'], data.provinsi_ktp, true);
-    setTimeout(() => smartFill(['kabupaten', 'kota', 'kab'], data.kabupaten_ktp, true), 1500);
+    // Alamat Dropdown (Berjenjang, waktu tunggu diperpanjang agar lebih stabil)
+    smartFill(['provinsi ktp'], ['provinsi'], data.provinsi_ktp, true);
+    setTimeout(() => smartFill(['kabupaten/kota'], ['kabupaten', 'kota'], data.kabupaten_ktp, true), 1500);
     
     if (data.kecamatan_ktp) {
-      setTimeout(() => smartFill(['kecamatan', 'kec'], data.kecamatan_ktp, true), 3000);
+      setTimeout(() => smartFill(['kecamatan ktp'], ['kecamatan'], data.kecamatan_ktp, true), 3000);
     }
     if (data.kelurahan_ktp) {
-      setTimeout(() => smartFill(['kelurahan', 'desa', 'kel'], data.kelurahan_ktp, true), 4500);
+      setTimeout(() => smartFill(['kelurahan ktp'], ['kelurahan', 'desa'], data.kelurahan_ktp, true), 4500);
     }
 
     if (window.top === window.self) {
-      alert('✅ SITB Assistant: Memulai pengisian form.\n\nMohon diamkan mouse selama 2-3 detik agar alamat (Provinsi & Kabupaten) tereksekusi dengan benar.');
+      alert('✅ SITB Assistant: Memulai pengisian cerdas!\n\nMohon diamkan mouse selama 4-5 detik agar seluruh alamat dan dropdown tereksekusi dengan benar.');
     }
   }
 });
