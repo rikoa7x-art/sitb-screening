@@ -5,7 +5,8 @@
   "description": "Asisten pengisian form SITB dari data skrining warga",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "https://*.supabase.co/*",
