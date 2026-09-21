@@ -1,0 +1,1 @@
+const CONFIG = { SUPABASE_URL: 'https://lubgcwhrsyqvnbiutxkf.supabase.co', SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1Ymdjd2hyc3lxdm5iaXV0eGtmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4OTk5MzM3MCwiZXhwIjoyMTA1NTY5MzcwfQ.vZFViE9wRgdr9Q7bsjcDeaCe9Sn6WtsIie7vMhduQ3g' };
