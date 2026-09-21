@@ -26,7 +26,7 @@ export default function Step1Identitas() {
 
         <FormField label="Tempat Skrining" required error={errors.tempat_skrining?.message}>
           <select {...register('tempat_skrining')} className="form-select">
-            <option value="">-- Pilih Tempat Skrining (Desa) --</option>
+            <option value="">-- Pilih Tempat Skrining --</option>
             {OPSI_TEMPAT.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
         </FormField>

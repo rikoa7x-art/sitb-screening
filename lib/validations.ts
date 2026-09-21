@@ -64,11 +64,8 @@ export const OPSI_DESA = [
 ] as const
 
 export const OPSI_TEMPAT = [
-  'Desa Tanjungwangi',
-  'Desa Gunung Tua',
-  'Desa Cijambe',
-  'Desa Bantarsari',
-  'Desa Sukahurip',
+  'Puskesmas', 'Posyandu', 'Posbindu', 'Rumah Warga',
+  'Tempat Kerja', 'Sekolah', 'Pesantren', 'Lapas/Rutan', 'Lainnya'
 ] as const
 
 export const OPSI_PEKERJAAN = [

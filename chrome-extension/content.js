@@ -495,9 +495,9 @@
       '#lokasi_skrining_id', '[name="lokasi_skrining_id"]',
       '#lokasi_skrining', '[name="lokasi_skrining"]'
     ];
-    const tempatVal = data.tempat_skrining || 'Desa Tanjungwangi';
+    const tempatVal = data.tempat_skrining || 'Puskesmas';
     const desaPolos = tempatVal.replace(/^desa\s*/i, '').trim();
-    const tempatFallbacks = [desaPolos, 'Posyandu', 'Puskesmas', 'Rumah Warga', 'Lainnya'];
+    const tempatFallbacks = [desaPolos, 'Puskesmas', 'Posyandu', 'Posbindu', 'Rumah Warga', 'Lainnya'];
     
     let tempatOk = await setDropdownSmart('Tempat Skrining', tempatCandidates, tempatVal, tempatFallbacks);
     if (!tempatOk) {
