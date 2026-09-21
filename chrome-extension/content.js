@@ -139,21 +139,197 @@
     return true;
   }
 
+  // ── Dropdown Item Text Extractor ────────────────────────────────────────────
+  function extractItemTexts(item, textField) {
+    if (item === null || item === undefined) return [];
+    if (typeof item === 'string' || typeof item === 'number') {
+      return [String(item).trim()];
+    }
+    const texts = [];
+    if (textField && item[textField] !== undefined && item[textField] !== null) {
+      texts.push(String(item[textField]).trim());
+    }
+    const knownKeys = [
+      'text', 'nama', 'name', 'label', 'nama_pekerjaan', 'pekerjaan', 'nm_pekerjaan',
+      'uraian', 'deskripsi', 'description', 'keterangan', 'kd_pekerjaan', 'kode',
+      'nama_tempat', 'tempat', 'nm_tempat', 'title', 'value'
+    ];
+    for (const k of knownKeys) {
+      if (item[k] !== undefined && item[k] !== null) {
+        texts.push(String(item[k]).trim());
+      }
+    }
+    for (const [k, v] of Object.entries(item)) {
+      if (typeof v === 'string' && v.trim().length > 0 && !k.startsWith('_')) {
+        texts.push(v.trim());
+      }
+    }
+    return Array.from(new Set(texts.filter(Boolean)));
+  }
+
+  // ── Get Kendo Widget from Any Related Element ──────────────────────────────
+  function getKendoWidget(el) {
+    if (!el || !$) return null;
+    const $el = $(el);
+    let w = $el.data('kendoDropDownList') || $el.data('kendoComboBox');
+    if (w) return w;
+
+    const roleEl = $el.find('[data-role="dropdownlist"], [data-role="combobox"]').addBack('[data-role="dropdownlist"], [data-role="combobox"]');
+    if (roleEl.length) {
+      w = roleEl.data('kendoDropDownList') || roleEl.data('kendoComboBox');
+      if (w) return w;
+    }
+
+    const wrapper = $el.closest('.k-widget').add($el.find('.k-widget'));
+    if (wrapper.length) {
+      w = wrapper.data('kendoDropDownList') || wrapper.data('kendoComboBox');
+      if (w) return w;
+    }
+
+    if (window.kendo && typeof window.kendo.widgetInstance === 'function') {
+      try {
+        w = window.kendo.widgetInstance($el) || (wrapper.length ? window.kendo.widgetInstance(wrapper) : null);
+        if (w) return w;
+      } catch (e) {}
+    }
+    return null;
+  }
+
+  // ── Select Item in Kendo Widget Safely & Update Display ─────────────────────
+  function selectKendoWidget(widget, index, item, targetText, origEl) {
+    try {
+      const valueField = widget.options?.dataValueField || 'value';
+      let val = undefined;
+      if (item !== null && typeof item === 'object') {
+        val = item[valueField] !== undefined ? item[valueField] : (item.value !== undefined ? item.value : (item.id !== undefined ? item.id : index));
+      } else if (typeof item === 'string' || typeof item === 'number') {
+        val = item;
+      }
+
+      if (typeof widget.select === 'function') {
+        widget.select(index);
+      }
+      if (val !== undefined && typeof widget.value === 'function') {
+        widget.value(val);
+      }
+      if (typeof widget.trigger === 'function') {
+        widget.trigger('select', { item: widget.ul ? $(widget.ul).children().eq(index) : null });
+        widget.trigger('change');
+      }
+
+      const nativeEl = origEl || (widget.element ? widget.element[0] : null);
+      if (nativeEl) {
+        if (val !== undefined) nativeEl.value = val;
+        nativeEl.dispatchEvent(new Event('input', { bubbles: true }));
+        nativeEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      const displayTxt = (item && typeof item === 'object')
+        ? (item[widget.options?.dataTextField] ?? item.text ?? item.nama ?? item.nama_pekerjaan ?? item.pekerjaan ?? targetText)
+        : String(item ?? targetText);
+
+      if (widget.wrapper) {
+        const kInput = widget.wrapper.find('.k-input');
+        if (kInput.length) {
+          if (kInput[0].tagName === 'INPUT') {
+            kInput.val(displayTxt);
+            kInput[0].dispatchEvent(new Event('input', { bubbles: true }));
+            kInput[0].dispatchEvent(new Event('change', { bubbles: true }));
+          } else {
+            kInput.text(displayTxt);
+          }
+        }
+      }
+      return true;
+    } catch (e) {
+      console.warn('[SITB Assistant] Error selecting widget item:', e);
+      return false;
+    }
+  }
+
+  // ── Flexible Text Matcher ──────────────────────────────────────────────────
+  function matchText(candidate, target) {
+    if (!candidate || !target) return false;
+    const c = String(candidate).trim().toLowerCase();
+    const t = String(target).trim().toLowerCase();
+    if (c === t) return true;
+
+    // Normalizer: strip whitespace, slashes, punctuation
+    const cleanC = c.replace(/[\s\/_,\-\.\*:]+/g, '');
+    const cleanT = t.replace(/[\s\/_,\-\.\*:]+/g, '');
+    if (cleanC === cleanT) return true;
+
+    // Desa prefix stripping
+    const cleanCNoDesa = cleanC.replace(/^desa/, '');
+    const cleanTNoDesa = cleanT.replace(/^desa/, '');
+    if (cleanCNoDesa === cleanTNoDesa) return true;
+
+    // Substring inclusion (min length 3)
+    if (cleanT.length >= 3 && (cleanC.includes(cleanT) || cleanT.includes(cleanC))) return true;
+    if (cleanTNoDesa.length >= 3 && (cleanCNoDesa.includes(cleanTNoDesa) || cleanTNoDesa.includes(cleanCNoDesa))) return true;
+
+    // Ya / Tidak special matching
+    if (t === 'ya' && (c === 'ya' || c === 'ada' || c.includes('ya') || c.includes('ada') || c.includes('positif') || c.includes('reaktif'))) return true;
+    if (t === 'tidak' && (c === 'tidak' || c === 'tidak ada' || c.includes('tidak') || c.includes('negatif') || c.includes('non') || c.includes('bukan'))) return true;
+
+    return false;
+  }
+
+  // ── Click Popup Item in DOM Fallback ───────────────────────────────────────
+  async function clickPopupItem(searchTargets, wrapperEl, widget) {
+    let opened = false;
+    if (widget && typeof widget.open === 'function') {
+      try {
+        widget.open();
+        opened = true;
+      } catch (e) {}
+    }
+    if (!opened && wrapperEl) {
+      const arrow = wrapperEl.querySelector('.k-select, .k-icon, .k-dropdown-wrap') || wrapperEl;
+      arrow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      arrow.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      opened = true;
+    }
+
+    await sleep(350);
+
+    const items = Array.from(document.querySelectorAll('.k-animation-container .k-item, .k-popup .k-item, .k-list .k-item, ul[role="listbox"] li'));
+    console.log('[SITB Assistant] clickPopupItem candidates count:', items.length);
+
+    for (const st of searchTargets) {
+      for (const item of items) {
+        const itemTxt = item.textContent.trim();
+        if (matchText(itemTxt, st)) {
+          console.log(`[SITB Assistant] Found popup item "${itemTxt}" matching "${st}", clicking...`);
+          item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+          item.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+          item.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+          await sleep(200);
+          if (widget && typeof widget.close === 'function') {
+            try { widget.close(); } catch (e) {}
+          }
+          return true;
+        }
+      }
+    }
+
+    if (widget && typeof widget.close === 'function') {
+      try { widget.close(); } catch (e) {}
+    }
+    return false;
+  }
+
   // ── Kendo Dropdown Master Setter ───────────────────────────────────────────
-  async function setKendoDrop(fieldId, targetText) {
-    if (!targetText) return false;
-    const target = String(targetText).trim().toLowerCase();
+  async function setKendoDrop(fieldId, targetText, fallbackList = []) {
+    if (!targetText && (!fallbackList || fallbackList.length === 0)) return false;
+    const searchTargets = [targetText, ...(fallbackList || [])].filter(Boolean);
     const baseId = fieldId.replace(/_input$/, '');
 
     // 1. Coba Kendo Widget API
     if ($) {
       const origEl = document.getElementById(baseId) || document.querySelector(`[name="${baseId}"]`);
       if (origEl) {
-        let widget = $(origEl).data('kendoDropDownList') || $(origEl).data('kendoComboBox');
-        if (!widget && window.kendo && window.kendo.widgetInstance) {
-          widget = window.kendo.widgetInstance($(origEl)) || window.kendo.widgetInstance($(origEl).closest('.k-widget'));
-        }
-
+        let widget = getKendoWidget(origEl);
         if (widget) {
           let data = widget.dataSource ? widget.dataSource.data() : [];
           if ((!data || data.length === 0) && widget.dataSource && typeof widget.dataSource.read === 'function') {
@@ -164,95 +340,33 @@
           }
 
           const textField = widget.options?.dataTextField || 'text';
-          const valueField = widget.options?.dataValueField || 'value';
 
-          for (let i = 0; i < data.length; i++) {
-            const item = data[i];
-            const txt = String(item[textField] ?? item.text ?? item.nama ?? '').trim().toLowerCase();
-
-            let isMatch = (txt === target);
-            if (!isMatch && (target === 'ya' || target === 'tidak')) {
-              if (target === 'ya' && (txt === 'ya' || txt === 'ada' || txt.includes('ya') || txt.includes('ada') || txt.includes('positif') || txt.includes('reaktif'))) isMatch = true;
-              if (target === 'tidak' && (txt === 'tidak' || txt === 'tidak ada' || txt.includes('tidak') || txt.includes('negatif') || txt.includes('non') || txt.includes('bukan'))) isMatch = true;
-            }
-            if (!isMatch && (txt.includes(target) || target.includes(txt))) {
-              isMatch = true;
-            }
-            if (!isMatch) {
-              const cleanTxt = txt.replace(/\s+/g, '').replace(/^desa/, '');
-              const cleanTarget = target.replace(/\s+/g, '').replace(/^desa/, '');
-              if (cleanTxt === cleanTarget || (cleanTxt.length > 3 && (cleanTxt.includes(cleanTarget) || cleanTarget.includes(cleanTxt)))) {
-                isMatch = true;
-              }
-            }
-
-            if (isMatch) {
-              const val = item[valueField] !== undefined ? item[valueField] : item.value;
-              widget.select(i);
-              if (val !== undefined) widget.value(val);
-              widget.trigger('select');
-              widget.trigger('change');
-
-              const visInput = document.querySelector(`[name="${baseId}_input"]`);
-              if (visInput) visInput.value = item[textField] || targetText;
-              origEl.value = val;
-              return true;
-            }
-          }
-
-          if (typeof widget.search === 'function') {
-            try {
-              widget.search(targetText);
-              if (widget.select && widget.select() !== -1) {
-                widget.trigger('change');
+          for (const st of searchTargets) {
+            for (let i = 0; i < data.length; i++) {
+              const item = data[i];
+              const texts = extractItemTexts(item, textField);
+              const matched = texts.some(t => matchText(t, st));
+              if (matched) {
+                selectKendoWidget(widget, i, item, st, origEl);
                 return true;
               }
-            } catch (e) {}
-          }
-        }
-      }
-    }
-
-    // 2. Fallback: Klik Arrow di DOM
-    const visInput = document.querySelector(`[name="${baseId}_input"]`) || document.getElementById(baseId);
-    if (visInput) {
-      const wrapper = visInput.closest('.k-widget, .k-dropdown, .k-combobox') || visInput.parentElement;
-      const arrow = wrapper ? wrapper.querySelector('.k-select, .k-icon') : null;
-      if (arrow) {
-        arrow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-        arrow.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-        await sleep(250);
-
-        const items = Array.from(document.querySelectorAll('.k-animation-container .k-item, .k-popup .k-item, .k-list .k-item, ul[role="listbox"] li'));
-        for (const item of items) {
-          const txt = item.textContent.trim().toLowerCase();
-          let match = (txt === target);
-          if (!match && target === 'ya' && (txt === 'ya' || txt === 'ada' || txt.includes('ya') || txt.includes('ada') || txt.includes('positif') || txt.includes('reaktif'))) match = true;
-          if (!match && target === 'tidak' && (txt === 'tidak' || txt.includes('tidak') || txt.includes('negatif') || txt.includes('non') || txt.includes('bukan'))) match = true;
-          if (!match && (txt.includes(target) || target.includes(txt))) match = true;
-          if (!match) {
-            const cleanTxt = txt.replace(/\s+/g, '').replace(/^desa/, '');
-            const cleanTarget = target.replace(/\s+/g, '').replace(/^desa/, '');
-            if (cleanTxt === cleanTarget || (cleanTxt.length > 3 && (cleanTxt.includes(cleanTarget) || cleanTarget.includes(cleanTxt)))) {
-              match = true;
             }
           }
-
-          if (match) {
-            item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-            item.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-            item.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-            await sleep(150);
-            return true;
-          }
         }
-        arrow.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
       }
     }
 
-    // 3. Fallback: Set nilai langsung
+    // 2. Fallback: DOM Popup Click
+    const origEl = document.getElementById(baseId) || document.querySelector(`[name="${baseId}"]`);
+    const wrapper = origEl ? (origEl.closest('.k-widget') || origEl.parentElement) : null;
+    const widget = origEl ? getKendoWidget(origEl) : null;
+    if (await clickPopupItem(searchTargets, wrapper, widget)) {
+      return true;
+    }
+
+    // 3. Fallback: Set input langsung
     const vis = document.querySelector(`[name="${baseId}_input"]`);
-    const hid = document.getElementById(baseId) || document.querySelector(`[name="${baseId}"]`);
+    const hid = origEl;
     if (vis) {
       vis.value = targetText;
       vis.dispatchEvent(new Event('input', { bubbles: true }));
@@ -284,7 +398,7 @@
 
       const row = el.closest('tr, .form-group, .row, .k-form-field') || el.parentElement;
       if (row) {
-        const input = row.querySelector('input[name$="_id"], input[name$="_id_input"], input[id$="_id"], select');
+        const input = row.querySelector('select, input:not([type="button"]):not([type="submit"]):not([type="image"])');
         if (input) {
           return input.id || input.name;
         }
@@ -295,21 +409,23 @@
 
   // ── Smart Dropdown Setter by Label or Selectors ────────────────────────────
   async function setDropdownSmart(labelPattern, candidateSelectors, targetText, fallbackList = []) {
-    if (!targetText && fallbackList.length === 0) return false;
+    if (!targetText && (!fallbackList || fallbackList.length === 0)) return false;
 
     const searchTargets = [targetText, ...fallbackList].filter(Boolean);
     console.log(`[SITB Assistant] setDropdownSmart for "${labelPattern}", targets:`, searchTargets);
 
-    // 1. Cari elemen input/select atau k-widget
     let targetEl = null;
+    let targetRow = null;
 
     // 1a. Coba cari via baris label di tabel (paling akurat untuk form SITB)
     const cleanPattern = labelPattern.toLowerCase().replace(/[\s\*:]+/g, '');
     const allRows = Array.from(document.querySelectorAll('tr, .form-group, .row, .k-form-field'));
     for (const row of allRows) {
-      const firstColText = (row.children[0]?.textContent || row.textContent).toLowerCase().replace(/[\s\*:]+/g, '');
-      if (firstColText.includes(cleanPattern)) {
-        targetEl = row.querySelector('input:not([type="hidden"]), select, input[name$="_id"], input, .k-widget');
+      const labelCell = row.querySelector('td:first-child, th:first-child, label, .control-label') || row.children[0] || row;
+      const cellText = labelCell.textContent.toLowerCase().replace(/[\s\*:]+/g, '');
+      if (cellText.includes(cleanPattern)) {
+        targetRow = row;
+        targetEl = row.querySelector('.k-widget, select, input:not([type="hidden"]), input');
         if (targetEl) {
           console.log(`[SITB Assistant] Found row for "${labelPattern}":`, row);
           break;
@@ -323,138 +439,83 @@
         const el = document.querySelector(sel);
         if (el) {
           targetEl = el;
+          targetRow = el.closest('tr, .form-group, .row, .k-form-field');
           break;
         }
       }
     }
 
-    if (!targetEl) {
+    if (!targetEl && !targetRow) {
       console.warn(`[SITB Assistant] Elemen untuk "${labelPattern}" tidak ditemukan di DOM.`);
       return false;
     }
 
     // 2. Coba lewat Kendo UI Widget API
-    if ($) {
-      let widget = $(targetEl).data('kendoDropDownList') || $(targetEl).data('kendoComboBox');
-      if (!widget && window.kendo && window.kendo.widgetInstance) {
-        widget = window.kendo.widgetInstance($(targetEl)) || window.kendo.widgetInstance($(targetEl).closest('.k-widget'));
-      }
-      if (!widget) {
-        const kWidgetEl = targetEl.closest('.k-widget') || targetEl.parentElement?.querySelector('.k-widget');
-        if (kWidgetEl) {
-          widget = $(kWidgetEl).data('kendoDropDownList') || $(kWidgetEl).data('kendoComboBox');
-          if (!widget && window.kendo && window.kendo.widgetInstance) {
-            widget = window.kendo.widgetInstance($(kWidgetEl));
-          }
-        }
-      }
-
-      if (widget) {
-        let data = widget.dataSource ? widget.dataSource.data() : [];
-        if ((!data || data.length === 0) && widget.dataSource && typeof widget.dataSource.read === 'function') {
-          try {
-            await widget.dataSource.read();
-            data = widget.dataSource.data();
-          } catch (e) {}
-        }
-
-        console.log(`[SITB Assistant] "${labelPattern}" options in dataSource (${data.length}):`, data);
-
-        const textField = widget.options?.dataTextField || 'text';
-        const valueField = widget.options?.dataValueField || 'value';
-
-        let matchedIndex = -1;
-        let matchedItem = null;
-
-        for (const st of searchTargets) {
-          const cleanSt = String(st).trim().toLowerCase();
-          const cleanStNoDesa = cleanSt.replace(/\s+/g, '').replace(/^desa/, '');
-
-          for (let i = 0; i < data.length; i++) {
-            const item = data[i];
-            const txt = String(item[textField] ?? item.text ?? item.nama ?? item.label ?? item.deskripsi ?? '').trim().toLowerCase();
-            const cleanTxt = txt.replace(/\s+/g, '').replace(/^desa/, '');
-
-            if (txt === cleanSt || cleanTxt === cleanStNoDesa) {
-              matchedIndex = i;
-              matchedItem = item;
-              break;
-            }
-            if (cleanStNoDesa.length > 3 && (cleanTxt.includes(cleanStNoDesa) || cleanStNoDesa.includes(cleanTxt))) {
-              matchedIndex = i;
-              matchedItem = item;
-              break;
-            }
-          }
-          if (matchedIndex !== -1) break;
-        }
-
-        if (matchedIndex !== -1 && matchedItem) {
-          const val = matchedItem[valueField] !== undefined ? matchedItem[valueField] : matchedItem.value;
-          widget.select(matchedIndex);
-          if (val !== undefined) widget.value(val);
-          widget.trigger('select');
-          widget.trigger('change');
-
-          const vis = targetEl.closest('.k-widget')?.querySelector('.k-input') || document.querySelector(`[name="${targetEl.name}_input"]`);
-          if (vis) {
-            if (vis.tagName === 'INPUT') vis.value = matchedItem[textField] || targetText;
-            else vis.textContent = matchedItem[textField] || targetText;
-          }
-          console.log(`[SITB Assistant] Successfully selected "${matchedItem[textField]}" for "${labelPattern}"`);
-          return true;
-        }
-
-        // Jika ComboBox dan belum cocok, coba set text langsung
-        if (typeof widget.text === 'function') {
-          widget.value(targetText);
-          widget.text(targetText);
-          widget.trigger('change');
-          return true;
-        }
+    const contextEl = targetEl || targetRow;
+    let widget = getKendoWidget(contextEl);
+    if (!widget && targetRow) {
+      const inputs = Array.from(targetRow.querySelectorAll('select, input, .k-widget'));
+      for (const inp of inputs) {
+        widget = getKendoWidget(inp);
+        if (widget) break;
       }
     }
 
-    // 3. Fallback: Klik Arrow di DOM untuk membuka popup list
-    const wrapper = targetEl.closest('.k-widget, .k-dropdown, .k-combobox') || targetEl.parentElement;
-    const arrow = wrapper ? wrapper.querySelector('.k-select, .k-icon') : null;
-    if (arrow) {
-      arrow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-      arrow.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-      await sleep(300);
+    if (widget) {
+      let data = widget.dataSource ? widget.dataSource.data() : [];
+      if ((!data || data.length === 0) && widget.dataSource && typeof widget.dataSource.read === 'function') {
+        try {
+          await widget.dataSource.read();
+          data = widget.dataSource.data();
+        } catch (e) {}
+      }
 
-      const items = Array.from(document.querySelectorAll('.k-animation-container .k-item, .k-popup .k-item, .k-list .k-item, ul[role="listbox"] li'));
-      console.log(`[SITB Assistant] Popup items for "${labelPattern}":`, items.map(it => it.textContent.trim()));
+      // If still empty, try opening widget briefly
+      if (!data || data.length === 0) {
+        if (typeof widget.open === 'function') {
+          try {
+            widget.open();
+            await sleep(300);
+            widget.close();
+            data = widget.dataSource ? widget.dataSource.data() : [];
+          } catch (e) {}
+        }
+      }
+
+      console.log(`[SITB Assistant] "${labelPattern}" options in dataSource (${data.length}):`, data);
+
+      const textField = widget.options?.dataTextField || 'text';
 
       for (const st of searchTargets) {
-        const cleanSt = String(st).trim().toLowerCase().replace(/\s+/g, '').replace(/^desa/, '');
-        for (const item of items) {
-          const txt = item.textContent.trim().toLowerCase();
-          const cleanTxt = txt.replace(/\s+/g, '').replace(/^desa/, '');
-
-          if (cleanTxt === cleanSt || (cleanSt.length > 3 && (cleanTxt.includes(cleanSt) || cleanSt.includes(cleanTxt)))) {
-            item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-            item.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-            item.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-            await sleep(150);
-            console.log(`[SITB Assistant] Clicked item "${txt}" for "${labelPattern}"`);
+        for (let i = 0; i < data.length; i++) {
+          const item = data[i];
+          const texts = extractItemTexts(item, textField);
+          const matched = texts.some(t => matchText(t, st));
+          if (matched) {
+            console.log(`[SITB Assistant] Successfully matched "${texts[0]}" for "${labelPattern}"`);
+            selectKendoWidget(widget, i, item, st, targetEl);
             return true;
           }
         }
       }
-      arrow.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    }
+
+    // 3. Fallback: Buka Dropdown & Klik Item di DOM Popup
+    const wrapper = widget?.wrapper?.[0] || (targetEl ? (targetEl.closest('.k-widget') || targetEl.parentElement) : null) || targetRow;
+    if (await clickPopupItem(searchTargets, wrapper, widget)) {
+      return true;
     }
 
     // 4. Fallback jika native <select>
-    if (targetEl.tagName === 'SELECT') {
-      const opts = Array.from(targetEl.options);
+    const selectEl = targetRow?.querySelector('select') || (targetEl?.tagName === 'SELECT' ? targetEl : null);
+    if (selectEl) {
+      const opts = Array.from(selectEl.options);
       for (const st of searchTargets) {
-        const cleanSt = String(st).trim().toLowerCase().replace(/\s+/g, '');
         for (let i = 0; i < opts.length; i++) {
-          const optTxt = opts[i].text.trim().toLowerCase().replace(/\s+/g, '');
-          if (optTxt === cleanSt || (cleanSt.length > 3 && (optTxt.includes(cleanSt) || cleanSt.includes(optTxt)))) {
-            targetEl.selectedIndex = i;
-            targetEl.dispatchEvent(new Event('change', { bubbles: true }));
+          if (matchText(opts[i].text, st)) {
+            selectEl.selectedIndex = i;
+            selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
             return true;
           }
         }
@@ -465,10 +526,10 @@
   }
 
   // ── Helper: Set Dropdown by Label Text ─────────────────────────────────────
-  async function setDropByLabel(labelText, targetText) {
+  async function setDropByLabel(labelText, targetText, fallbackList = []) {
     const fieldId = findFieldIdByLabel(labelText);
     if (fieldId) {
-      return await setKendoDrop(fieldId, targetText);
+      return await setKendoDrop(fieldId, targetText, fallbackList);
     }
     return false;
   }
@@ -484,7 +545,7 @@
     if (setDateVal('dt_tgl_skrining', data.tanggal_skrining)) ok++;
     await setKendoDrop('kegiatan_id', 'Skrining Oleh Fasyankes');
 
-    // 1a. Tempat Skrining (Smart matching: coba nama desa, lalu fallback ke kategori tempat)
+    // 1a. Tempat Skrining (Smart matching & sinonim kategori tempat)
     const tempatCandidates = [
       '#tempat_skrining_id', '[name="tempat_skrining_id"]',
       '#tempat_skrining', '[name="tempat_skrining"]',
@@ -496,12 +557,28 @@
       '#lokasi_skrining', '[name="lokasi_skrining"]'
     ];
     const tempatVal = data.tempat_skrining || 'Puskesmas';
-    const desaPolos = tempatVal.replace(/^desa\s*/i, '').trim();
-    const tempatFallbacks = [desaPolos, 'Puskesmas', 'Posyandu', 'Posbindu', 'Rumah Warga', 'Lainnya'];
-    
+    const cleanTempat = tempatVal.toLowerCase().trim();
+    const desaPolos = cleanTempat.replace(/^desa\s*/i, '').trim();
+
+    const TEMPAT_MAP = {
+      'puskesmas': ['puskesmas', 'puskesmas tanjungwangi', 'fasyankes', 'fasilitas kesehatan', 'klinik', 'lainnya'],
+      'posyandu': ['posyandu', 'posyandu lansia', 'posyandu balita', 'pos', 'lainnya'],
+      'posbindu': ['posbindu', 'posbindu ptm', 'pos', 'lainnya'],
+      'rumah warga': ['rumah warga', 'rumah', 'kunjungan rumah', 'domisili', 'komunitas', 'lainnya'],
+      'tempat kerja': ['tempat kerja', 'kantor', 'perusahaan', 'pabrik', 'lainnya'],
+      'sekolah': ['sekolah', 'institusi pendidikan', 'sd', 'smp', 'sma', 'lainnya'],
+      'pesantren': ['pesantren', 'pondok pesantren', 'ponpes', 'lainnya'],
+      'lapas/rutan': ['lapas/rutan', 'lapas', 'rutan', 'lembaga pemasyarakatan', 'tahanan', 'lainnya'],
+      'lainnya': ['lainnya', 'lain-lain', 'lain nya']
+    };
+
+    const tempatFallbacks = TEMPAT_MAP[cleanTempat] || [desaPolos, 'Puskesmas', 'Posyandu', 'Rumah Warga', 'Lainnya'];
     let tempatOk = await setDropdownSmart('Tempat Skrining', tempatCandidates, tempatVal, tempatFallbacks);
     if (!tempatOk) {
-      tempatOk = await setKendoDrop('tempat_skrining_id', tempatVal);
+      for (const cand of ['tempat_skrining_id', 'tempat_skrining', 'tempat_pelaksanaan_id', 'tempat_pelaksanaan', 'tempat_id']) {
+        tempatOk = await setKendoDrop(cand, tempatVal, tempatFallbacks);
+        if (tempatOk) break;
+      }
     }
     if (tempatOk) ok++;
 
@@ -510,37 +587,82 @@
     if (setTextVal('#nama_peserta, [name="nama_peserta"]', data.nama_peserta)) ok++;
     if (await setKendoDrop('jenis_kelamin_id', data.jenis_kelamin)) ok++;
     if (setDateVal('dt_tgl_lahir', data.tanggal_lahir)) ok++;
+    await sleep(600); // Tunggu SITB selesai menghitung Umur dari Tanggal Lahir
 
-    // 1b. Pekerjaan (Smart matching: coba nama pekerjaan langsung & sinonim Dukcapil/SITB)
+    // 1b. Pekerjaan (Smart matching: coba nama pekerjaan langsung, gabungan SITB, & sinonim)
     const pekerjaanCandidates = [
       '#pekerjaan_id', '[name="pekerjaan_id"]',
       '#pekerjaan', '[name="pekerjaan"]',
       '#id_pekerjaan', '[name="id_pekerjaan"]',
       '#kd_pekerjaan', '[name="kd_pekerjaan"]',
+      '#kd_pekerjaan_id', '[name="kd_pekerjaan_id"]',
+      '#mst_pekerjaan_id', '[name="mst_pekerjaan_id"]',
       '#profesi_id', '[name="profesi_id"]',
       '#profesi', '[name="profesi"]'
     ];
     const pekerjaanVal = data.pekerjaan || 'Tidak Bekerja';
     const cleanPekerjaan = pekerjaanVal.toLowerCase().trim();
-    
+
     const PEKERJAAN_MAP = {
-      'pedagang': ['pedagang', 'wiraswasta', 'perdagangan', 'usaha', 'swasta', 'lainnya'],
-      'wiraswasta': ['wiraswasta', 'pedagang', 'usaha', 'swasta', 'lainnya'],
-      'petani/pekebun': ['petani/pekebun', 'petani', 'pekebun', 'pertanian', 'buruh', 'lainnya'],
-      'nelayan': ['nelayan', 'perikanan', 'buruh', 'lainnya'],
-      'pegawai swasta': ['pegawai swasta', 'karyawan swasta', 'swasta', 'karyawan', 'wiraswasta'],
-      'pegawai negeri sipil': ['pegawai negeri sipil', 'pns', 'asn', 'pns/tni/polri', 'pns / tni / polri'],
-      'tni/polri': ['tni/polri', 'tni', 'polri', 'pns/tni/polri', 'pns / tni / polri'],
-      'ibu rumah tangga': ['ibu rumah tangga', 'rumah tangga', 'irt', 'tidak bekerja'],
-      'pelajar/mahasiswa': ['pelajar/mahasiswa', 'pelajar', 'mahasiswa'],
-      'buruh harian lepas': ['buruh harian lepas', 'buruh harian', 'buruh', 'karyawan lepas'],
-      'tidak bekerja': ['tidak bekerja', 'tidak/belum bekerja', 'belum/tidak bekerja', 'tidak / belum bekerja', 'belum bekerja']
+      'pedagang': [
+        'pedagang', 'wiraswasta/pedagang', 'wiraswasta / pedagang', 'wiraswasta',
+        'perdagangan', 'usaha', 'pengusaha', 'swasta', 'karyawan swasta', 'pegawai swasta',
+        'buruh', 'lainnya', 'lain-lain'
+      ],
+      'wiraswasta': [
+        'wiraswasta', 'wiraswasta/pedagang', 'wiraswasta / pedagang', 'pedagang',
+        'usaha', 'pengusaha', 'swasta', 'karyawan swasta', 'pegawai swasta',
+        'lainnya', 'lain-lain'
+      ],
+      'petani/pekebun': [
+        'petani/pekebun', 'petani / pekebun', 'buruh/petani/nelayan', 'petani',
+        'pekebun', 'pertanian', 'perkebunan', 'buruh tani', 'buruh', 'lainnya', 'lain-lain'
+      ],
+      'nelayan': [
+        'nelayan', 'buruh/petani/nelayan', 'perikanan', 'buruh nelayan', 'buruh', 'lainnya', 'lain-lain'
+      ],
+      'buruh harian lepas': [
+        'buruh harian lepas', 'buruh harian', 'buruh/petani/nelayan', 'buruh lepas',
+        'buruh', 'karyawan lepas', 'pekerja lepas', 'swasta', 'lainnya', 'lain-lain'
+      ],
+      'pegawai swasta': [
+        'pegawai swasta', 'karyawan swasta', 'pegawai negeri/swasta', 'swasta',
+        'karyawan', 'buruh swasta', 'wiraswasta', 'lainnya', 'lain-lain'
+      ],
+      'pegawai negeri sipil': [
+        'pegawai negeri sipil', 'pegawai negeri sipil (pns)', 'pns', 'asn',
+        'pegawai negeri/swasta', 'pns/tni/polri', 'pns / tni / polri',
+        'aparatur sipil negara', 'pegawai negeri', 'lainnya', 'lain-lain'
+      ],
+      'tni/polri': [
+        'tni/polri', 'tni / polri', 'pns/tni/polri', 'pns / tni / polri',
+        'tni', 'polri', 'tentara', 'polisi', 'anggota tni', 'anggota polri', 'lainnya', 'lain-lain'
+      ],
+      'ibu rumah tangga': [
+        'ibu rumah tangga', 'tidak bekerja / ibu rumah tangga', 'tidak bekerja/ibu rumah tangga',
+        'mengurus rumah tangga', 'rumah tangga', 'irt', 'tidak bekerja', 'belum/tidak bekerja', 'lainnya', 'lain-lain'
+      ],
+      'pelajar/mahasiswa': [
+        'pelajar/mahasiswa', 'pelajar / mahasiswa', 'pelajar', 'mahasiswa', 'siswa',
+        'anak sekolah', 'lainnya', 'lain-lain'
+      ],
+      'tidak bekerja': [
+        'tidak bekerja', 'tidak bekerja / ibu rumah tangga', 'tidak bekerja/ibu rumah tangga',
+        'belum/tidak bekerja', 'tidak/belum bekerja', 'belum bekerja', 'mengurus rumah tangga',
+        'lainnya', 'lain-lain'
+      ],
+      'lainnya': [
+        'lainnya', 'lain-lain', 'lain nya', 'lain - lain', 'pekerjaan lainnya'
+      ]
     };
-    
-    const pekerjaanFallbacks = PEKERJAAN_MAP[cleanPekerjaan] || [cleanPekerjaan];
+
+    const pekerjaanFallbacks = PEKERJAAN_MAP[cleanPekerjaan] || [cleanPekerjaan, 'Wiraswasta', 'Lainnya'];
     let pekerjaanOk = await setDropdownSmart('Pekerjaan', pekerjaanCandidates, pekerjaanVal, pekerjaanFallbacks);
     if (!pekerjaanOk) {
-      pekerjaanOk = await setKendoDrop('pekerjaan_id', pekerjaanVal);
+      for (const cand of ['pekerjaan_id', 'pekerjaan', 'kd_pekerjaan', 'kd_pekerjaan_id', 'id_pekerjaan', 'profesi_id']) {
+        pekerjaanOk = await setKendoDrop(cand, pekerjaanVal, pekerjaanFallbacks);
+        if (pekerjaanOk) break;
+      }
     }
     if (pekerjaanOk) ok++;
 

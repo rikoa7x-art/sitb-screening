@@ -58,8 +58,11 @@
         const name = el.name || $(el).find('input, select').attr('name') || '—';
         const data = w.dataSource ? w.dataSource.data() : [];
         const textField = w.options?.dataTextField || 'text';
-        const optionsList = data.map(d => d[textField] ?? d.text ?? d.nama ?? d.label ?? JSON.stringify(d)).slice(0, 20);
-        widgetInfo.push(`📍 [${id}] (name="${name}"):\n   Pilihan: ${optionsList.join(' | ')}`);
+        const optionsList = data.map(d => {
+          if (typeof d === 'string' || typeof d === 'number') return String(d);
+          return d[textField] ?? d.text ?? d.nama ?? d.nama_pekerjaan ?? d.pekerjaan ?? d.nm_pekerjaan ?? d.uraian ?? d.deskripsi ?? d.label ?? JSON.stringify(d);
+        }).slice(0, 30);
+        widgetInfo.push(`📍 [${id}] (name="${name}"):\n   Pilihan (${data.length}): ${optionsList.join(' | ')}`);
       }
     });
     if (widgetInfo.length > 0) {

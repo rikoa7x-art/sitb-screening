@@ -115,7 +115,7 @@ async function markDone(id) {
 // Init
 fetchData();
 
-// Tombol Diagnostik - inject diagnostic.js ke semua frame
+// Tombol Diagnostik - inject diagnostic.js ke semua frame di MAIN world
 document.getElementById('btn-diagnostic').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) {
@@ -124,7 +124,8 @@ document.getElementById('btn-diagnostic').addEventListener('click', async () => 
   }
   await chrome.scripting.executeScript({
     target: { tabId: tab.id, allFrames: true },
-    files: ['diagnostic.js']
+    files: ['diagnostic.js'],
+    world: 'MAIN'
   });
   window.close(); // Tutup popup agar panel diagnostik terlihat
 });
