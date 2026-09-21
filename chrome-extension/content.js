@@ -3,60 +3,52 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'FILL_DATA') {
     const data = request.data;
     
-    console.log("SITB Assistant: Memulai auto-fill data", data);
-
-    // Helper untuk set value di form
-    const setValue = (selector, value) => {
-      // Cari elemen dengan selector yang diberikan
-      const el = document.querySelector(selector);
-      if (el) {
-        // Tulis value
-        el.value = value;
-        // Trigger event supaya website mendeteksi ada ketikan (React/Vue/Angular butuh ini)
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    };
-
-    const setRadio = (name, valueMatches) => {
-      const radios = document.querySelectorAll(`input[type="radio"][name="${name}"]`);
-      for (const r of radios) {
-        // Cari radio yang text atau valuenya mirip dengan jawaban
-        if (valueMatches.some(v => r.value.toLowerCase().includes(v.toLowerCase()) || r.nextSibling?.textContent.toLowerCase().includes(v.toLowerCase()))) {
-          r.checked = true;
-          r.dispatchEvent(new Event('change', { bubbles: true }));
-          r.click();
-          break;
+    // Helper untuk mencari input berdasarkan name, id, atau sebagian string
+    const findAndFill = (keywords, value) => {
+      if (!value) return;
+      
+      // Kumpulkan semua input, textarea
+      const inputs = document.querySelectorAll('input:not([type="hidden"]), textarea');
+      
+      for (const input of inputs) {
+        const name = (input.name || '').toLowerCase();
+        const id = (input.id || '').toLowerCase();
+        
+        // Cek apakah name/id mengandung salah satu keyword
+        const isMatch = keywords.some(kw => name.includes(kw) || id.includes(kw));
+        
+        if (isMatch && input.value === '') {
+          input.focus();
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          input.blur();
+          return true; // Stop setelah ketemu 1 yang cocok
         }
       }
+      return false;
     };
 
-    /**
-     * CATATAN UNTUK PETUGAS PUSKESMAS:
-     * Karena struktur HTML SITB Kemenkes bisa berubah-ubah, 
-     * Anda bisa menyesuaikan selector CSS di bawah ini jika ada yang tidak terisi.
-     * Gunakan inspect element di Chrome untuk mencari "name" atau "id" dari kolom SITB.
-     */
-
+    // --- PEMETAAN KOLOM SITB ---
+    
     // Identitas
-    setValue('input[name="nik"], input[id="nik"], input[placeholder*="NIK"]', data.nik);
-    setValue('input[name="nama"], input[id="nama_lengkap"], input[placeholder*="Nama"]', data.nama_peserta);
-    setValue('input[name="tempat_lahir"]', data.tempat_lahir || ''); 
-    setValue('input[name="tanggal_lahir"], input[type="date"]', data.tanggal_lahir);
-    setValue('input[name="no_hp"], input[name="telepon"]', data.no_hp);
+    findAndFill(['nik', 'no_identitas'], data.nik);
+    findAndFill(['nama', 'nm_pasien', 'namapasien'], data.nama_peserta);
+    findAndFill(['tgl_lahir', 'tanggallahir', 'tanggal_lahir'], data.tanggal_lahir);
+    findAndFill(['no_hp', 'nohp', 'telepon', 'telp'], data.no_hp);
     
     // Alamat
-    setValue('textarea[name="alamat"], input[name="alamat"]', data.alamat_ktp);
+    findAndFill(['alamat'], data.alamat_ktp);
     
     // Pemeriksaan Fisik
-    setValue('input[name="berat_badan"], input[id="bb"]', data.berat_badan);
-    setValue('input[name="tinggi_badan"], input[id="tb"]', data.tinggi_badan);
-    
-    // Faktor Risiko & Gejala (SITB mungkin pakai radio button atau dropdown)
-    // Contoh untuk dropdown/select
-    setValue('select[name="pekerjaan"]', data.pekerjaan);
-    
-    // Alert bahwa proses ketik selesai
-    alert('✅ SITB Assistant: Data pasien berhasil disalin ke form.\n\nSilakan periksa kembali isiannya sebelum menekan tombol Simpan.');
+    findAndFill(['berat', 'bb'], data.berat_badan);
+    findAndFill(['tinggi', 'tb'], data.tinggi_badan);
+    findAndFill(['tgl_skrining', 'tanggalskrining'], data.tanggal_skrining);
+
+    // Karena script ini sekarang berjalan di semua Iframe (allFrames: true),
+    // kita hanya munculkan alert dari frame utama (top window) agar tidak muncul berulang kali.
+    if (window.top === window.self) {
+      alert('✅ SITB Assistant: Proses pengisian selesai!\n\nPastikan untuk mengecek ulang kolom dropdown seperti Jenis Kelamin, Provinsi, dll (karena SITB menggunakan dropdown khusus).');
+    }
   }
 });

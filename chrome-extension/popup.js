@@ -58,7 +58,7 @@ async function fillForm(patientData) {
   let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   
   chrome.scripting.executeScript({
-    target: { tabId: tab.id },
+    target: { tabId: tab.id, allFrames: true },
     files: ['content.js']
   }, () => {
     chrome.tabs.sendMessage(tab.id, { action: 'FILL_DATA', data: patientData });
