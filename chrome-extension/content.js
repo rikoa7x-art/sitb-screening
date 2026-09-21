@@ -293,6 +293,177 @@
     return null;
   }
 
+  // ── Smart Dropdown Setter by Label or Selectors ────────────────────────────
+  async function setDropdownSmart(labelPattern, candidateSelectors, targetText, fallbackList = []) {
+    if (!targetText && fallbackList.length === 0) return false;
+
+    const searchTargets = [targetText, ...fallbackList].filter(Boolean);
+    console.log(`[SITB Assistant] setDropdownSmart for "${labelPattern}", targets:`, searchTargets);
+
+    // 1. Cari elemen input/select atau k-widget
+    let targetEl = null;
+
+    // 1a. Coba cari via baris label di tabel (paling akurat untuk form SITB)
+    const cleanPattern = labelPattern.toLowerCase().replace(/[\s\*:]+/g, '');
+    const allRows = Array.from(document.querySelectorAll('tr, .form-group, .row, .k-form-field'));
+    for (const row of allRows) {
+      const firstColText = (row.children[0]?.textContent || row.textContent).toLowerCase().replace(/[\s\*:]+/g, '');
+      if (firstColText.includes(cleanPattern)) {
+        targetEl = row.querySelector('input:not([type="hidden"]), select, input[name$="_id"], input, .k-widget');
+        if (targetEl) {
+          console.log(`[SITB Assistant] Found row for "${labelPattern}":`, row);
+          break;
+        }
+      }
+    }
+
+    // 1b. Fallback: Coba via candidateSelectors
+    if (!targetEl) {
+      for (const sel of candidateSelectors) {
+        const el = document.querySelector(sel);
+        if (el) {
+          targetEl = el;
+          break;
+        }
+      }
+    }
+
+    if (!targetEl) {
+      console.warn(`[SITB Assistant] Elemen untuk "${labelPattern}" tidak ditemukan di DOM.`);
+      return false;
+    }
+
+    // 2. Coba lewat Kendo UI Widget API
+    if ($) {
+      let widget = $(targetEl).data('kendoDropDownList') || $(targetEl).data('kendoComboBox');
+      if (!widget && window.kendo && window.kendo.widgetInstance) {
+        widget = window.kendo.widgetInstance($(targetEl)) || window.kendo.widgetInstance($(targetEl).closest('.k-widget'));
+      }
+      if (!widget) {
+        const kWidgetEl = targetEl.closest('.k-widget') || targetEl.parentElement?.querySelector('.k-widget');
+        if (kWidgetEl) {
+          widget = $(kWidgetEl).data('kendoDropDownList') || $(kWidgetEl).data('kendoComboBox');
+          if (!widget && window.kendo && window.kendo.widgetInstance) {
+            widget = window.kendo.widgetInstance($(kWidgetEl));
+          }
+        }
+      }
+
+      if (widget) {
+        let data = widget.dataSource ? widget.dataSource.data() : [];
+        if ((!data || data.length === 0) && widget.dataSource && typeof widget.dataSource.read === 'function') {
+          try {
+            await widget.dataSource.read();
+            data = widget.dataSource.data();
+          } catch (e) {}
+        }
+
+        console.log(`[SITB Assistant] "${labelPattern}" options in dataSource (${data.length}):`, data);
+
+        const textField = widget.options?.dataTextField || 'text';
+        const valueField = widget.options?.dataValueField || 'value';
+
+        let matchedIndex = -1;
+        let matchedItem = null;
+
+        for (const st of searchTargets) {
+          const cleanSt = String(st).trim().toLowerCase();
+          const cleanStNoDesa = cleanSt.replace(/\s+/g, '').replace(/^desa/, '');
+
+          for (let i = 0; i < data.length; i++) {
+            const item = data[i];
+            const txt = String(item[textField] ?? item.text ?? item.nama ?? item.label ?? item.deskripsi ?? '').trim().toLowerCase();
+            const cleanTxt = txt.replace(/\s+/g, '').replace(/^desa/, '');
+
+            if (txt === cleanSt || cleanTxt === cleanStNoDesa) {
+              matchedIndex = i;
+              matchedItem = item;
+              break;
+            }
+            if (cleanStNoDesa.length > 3 && (cleanTxt.includes(cleanStNoDesa) || cleanStNoDesa.includes(cleanTxt))) {
+              matchedIndex = i;
+              matchedItem = item;
+              break;
+            }
+          }
+          if (matchedIndex !== -1) break;
+        }
+
+        if (matchedIndex !== -1 && matchedItem) {
+          const val = matchedItem[valueField] !== undefined ? matchedItem[valueField] : matchedItem.value;
+          widget.select(matchedIndex);
+          if (val !== undefined) widget.value(val);
+          widget.trigger('select');
+          widget.trigger('change');
+
+          const vis = targetEl.closest('.k-widget')?.querySelector('.k-input') || document.querySelector(`[name="${targetEl.name}_input"]`);
+          if (vis) {
+            if (vis.tagName === 'INPUT') vis.value = matchedItem[textField] || targetText;
+            else vis.textContent = matchedItem[textField] || targetText;
+          }
+          console.log(`[SITB Assistant] Successfully selected "${matchedItem[textField]}" for "${labelPattern}"`);
+          return true;
+        }
+
+        // Jika ComboBox dan belum cocok, coba set text langsung
+        if (typeof widget.text === 'function') {
+          widget.value(targetText);
+          widget.text(targetText);
+          widget.trigger('change');
+          return true;
+        }
+      }
+    }
+
+    // 3. Fallback: Klik Arrow di DOM untuk membuka popup list
+    const wrapper = targetEl.closest('.k-widget, .k-dropdown, .k-combobox') || targetEl.parentElement;
+    const arrow = wrapper ? wrapper.querySelector('.k-select, .k-icon') : null;
+    if (arrow) {
+      arrow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      arrow.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await sleep(300);
+
+      const items = Array.from(document.querySelectorAll('.k-animation-container .k-item, .k-popup .k-item, .k-list .k-item, ul[role="listbox"] li'));
+      console.log(`[SITB Assistant] Popup items for "${labelPattern}":`, items.map(it => it.textContent.trim()));
+
+      for (const st of searchTargets) {
+        const cleanSt = String(st).trim().toLowerCase().replace(/\s+/g, '').replace(/^desa/, '');
+        for (const item of items) {
+          const txt = item.textContent.trim().toLowerCase();
+          const cleanTxt = txt.replace(/\s+/g, '').replace(/^desa/, '');
+
+          if (cleanTxt === cleanSt || (cleanSt.length > 3 && (cleanTxt.includes(cleanSt) || cleanSt.includes(cleanTxt)))) {
+            item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            item.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+            item.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            await sleep(150);
+            console.log(`[SITB Assistant] Clicked item "${txt}" for "${labelPattern}"`);
+            return true;
+          }
+        }
+      }
+      arrow.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    }
+
+    // 4. Fallback jika native <select>
+    if (targetEl.tagName === 'SELECT') {
+      const opts = Array.from(targetEl.options);
+      for (const st of searchTargets) {
+        const cleanSt = String(st).trim().toLowerCase().replace(/\s+/g, '');
+        for (let i = 0; i < opts.length; i++) {
+          const optTxt = opts[i].text.trim().toLowerCase().replace(/\s+/g, '');
+          if (optTxt === cleanSt || (cleanSt.length > 3 && (optTxt.includes(cleanSt) || cleanSt.includes(optTxt)))) {
+            targetEl.selectedIndex = i;
+            targetEl.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
   // ── Helper: Set Dropdown by Label Text ─────────────────────────────────────
   async function setDropByLabel(labelText, targetText) {
     const fieldId = findFieldIdByLabel(labelText);
@@ -312,13 +483,66 @@
     // ── 1. IDENTITAS DIRI PESERTA ──
     if (setDateVal('dt_tgl_skrining', data.tanggal_skrining)) ok++;
     await setKendoDrop('kegiatan_id', 'Skrining Oleh Fasyankes');
-    await setKendoDrop('tempat_skrining_id', data.tempat_skrining || 'Desa Tanjungwangi');
+
+    // 1a. Tempat Skrining (Smart matching: coba nama desa, lalu fallback ke kategori tempat)
+    const tempatCandidates = [
+      '#tempat_skrining_id', '[name="tempat_skrining_id"]',
+      '#tempat_skrining', '[name="tempat_skrining"]',
+      '#tempat_pelaksanaan_id', '[name="tempat_pelaksanaan_id"]',
+      '#tempat_pelaksanaan', '[name="tempat_pelaksanaan"]',
+      '#tempat_id', '[name="tempat_id"]',
+      '#id_tempat', '[name="id_tempat"]',
+      '#lokasi_skrining_id', '[name="lokasi_skrining_id"]',
+      '#lokasi_skrining', '[name="lokasi_skrining"]'
+    ];
+    const tempatVal = data.tempat_skrining || 'Desa Tanjungwangi';
+    const desaPolos = tempatVal.replace(/^desa\s*/i, '').trim();
+    const tempatFallbacks = [desaPolos, 'Posyandu', 'Puskesmas', 'Rumah Warga', 'Lainnya'];
+    
+    let tempatOk = await setDropdownSmart('Tempat Skrining', tempatCandidates, tempatVal, tempatFallbacks);
+    if (!tempatOk) {
+      tempatOk = await setKendoDrop('tempat_skrining_id', tempatVal);
+    }
+    if (tempatOk) ok++;
+
     await setKendoDrop('warga_negara_id', data.kewarganegaraan || 'WNI');
     if (setTextVal('#nik, [name="nik"]', data.nik)) ok++;
     if (setTextVal('#nama_peserta, [name="nama_peserta"]', data.nama_peserta)) ok++;
     if (await setKendoDrop('jenis_kelamin_id', data.jenis_kelamin)) ok++;
     if (setDateVal('dt_tgl_lahir', data.tanggal_lahir)) ok++;
-    if (await setKendoDrop('pekerjaan_id', data.pekerjaan || 'Tidak Bekerja')) ok++;
+
+    // 1b. Pekerjaan (Smart matching: coba nama pekerjaan langsung & sinonim Dukcapil/SITB)
+    const pekerjaanCandidates = [
+      '#pekerjaan_id', '[name="pekerjaan_id"]',
+      '#pekerjaan', '[name="pekerjaan"]',
+      '#id_pekerjaan', '[name="id_pekerjaan"]',
+      '#kd_pekerjaan', '[name="kd_pekerjaan"]',
+      '#profesi_id', '[name="profesi_id"]',
+      '#profesi', '[name="profesi"]'
+    ];
+    const pekerjaanVal = data.pekerjaan || 'Tidak Bekerja';
+    const cleanPekerjaan = pekerjaanVal.toLowerCase().trim();
+    
+    const PEKERJAAN_MAP = {
+      'pedagang': ['pedagang', 'wiraswasta', 'perdagangan', 'usaha', 'swasta', 'lainnya'],
+      'wiraswasta': ['wiraswasta', 'pedagang', 'usaha', 'swasta', 'lainnya'],
+      'petani/pekebun': ['petani/pekebun', 'petani', 'pekebun', 'pertanian', 'buruh', 'lainnya'],
+      'nelayan': ['nelayan', 'perikanan', 'buruh', 'lainnya'],
+      'pegawai swasta': ['pegawai swasta', 'karyawan swasta', 'swasta', 'karyawan', 'wiraswasta'],
+      'pegawai negeri sipil': ['pegawai negeri sipil', 'pns', 'asn', 'pns/tni/polri', 'pns / tni / polri'],
+      'tni/polri': ['tni/polri', 'tni', 'polri', 'pns/tni/polri', 'pns / tni / polri'],
+      'ibu rumah tangga': ['ibu rumah tangga', 'rumah tangga', 'irt', 'tidak bekerja'],
+      'pelajar/mahasiswa': ['pelajar/mahasiswa', 'pelajar', 'mahasiswa'],
+      'buruh harian lepas': ['buruh harian lepas', 'buruh harian', 'buruh', 'karyawan lepas'],
+      'tidak bekerja': ['tidak bekerja', 'tidak/belum bekerja', 'belum/tidak bekerja', 'tidak / belum bekerja', 'belum bekerja']
+    };
+    
+    const pekerjaanFallbacks = PEKERJAAN_MAP[cleanPekerjaan] || [cleanPekerjaan];
+    let pekerjaanOk = await setDropdownSmart('Pekerjaan', pekerjaanCandidates, pekerjaanVal, pekerjaanFallbacks);
+    if (!pekerjaanOk) {
+      pekerjaanOk = await setKendoDrop('pekerjaan_id', pekerjaanVal);
+    }
+    if (pekerjaanOk) ok++;
 
     // ── 2. ALAMAT SESUAI KARTU IDENTITAS ──
     if (setTextVal('#alamat_ktp, [name="alamat_ktp"]', data.alamat_ktp)) ok++;

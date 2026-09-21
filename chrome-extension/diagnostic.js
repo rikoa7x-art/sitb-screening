@@ -44,9 +44,33 @@
     sec(`${titlePrefix} (${allInputs.length} field)`, lines.join('\n'));
   }
 
+  function dumpKendoDropdowns(doc, titlePrefix) {
+    const $ = window.jQuery || window.$;
+    if (!$ || !window.kendo) return;
+    const kWidgets = Array.from(doc.querySelectorAll('.k-widget, select, input'));
+    const widgetInfo = [];
+    const seen = new Set();
+    kWidgets.forEach(el => {
+      const w = $(el).data('kendoDropDownList') || $(el).data('kendoComboBox');
+      if (w && !seen.has(w)) {
+        seen.add(w);
+        const id = el.id || $(el).find('input, select').attr('id') || $(el).closest('tr').find('td:first-child').text().trim() || '—';
+        const name = el.name || $(el).find('input, select').attr('name') || '—';
+        const data = w.dataSource ? w.dataSource.data() : [];
+        const textField = w.options?.dataTextField || 'text';
+        const optionsList = data.map(d => d[textField] ?? d.text ?? d.nama ?? d.label ?? JSON.stringify(d)).slice(0, 20);
+        widgetInfo.push(`📍 [${id}] (name="${name}"):\n   Pilihan: ${optionsList.join(' | ')}`);
+      }
+    });
+    if (widgetInfo.length > 0) {
+      sec(`${titlePrefix} (${widgetInfo.length} dropdown)`, widgetInfo.join('\n\n'));
+    }
+  }
+
   // Dump Top Document
   sec('ℹ️ TOP FRAME', `URL: ${location.href}`);
   dumpInputs(document, '📋 TOP FRAME FIELDS');
+  dumpKendoDropdowns(document, '🎯 TOP FRAME DROPDOWNS');
 
   // Dump Iframes
   const frames = Array.from(document.querySelectorAll('iframe'));
@@ -55,6 +79,7 @@
     try {
       if (f.contentDocument) {
         dumpInputs(f.contentDocument, `📋 IFRAME #${i+1} FIELDS`);
+        dumpKendoDropdowns(f.contentDocument, `🎯 IFRAME #${i+1} DROPDOWNS`);
       } else {
         sec(`📋 IFRAME #${i+1} FIELDS`, 'BLOCKED (Cross-Origin atau belum load)');
       }
