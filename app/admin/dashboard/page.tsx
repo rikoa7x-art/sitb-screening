@@ -18,6 +18,9 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<Screening | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const fetchData = async () => {
     setLoading(true)
@@ -38,6 +41,36 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => { fetchData() }, [statusFilter, page])
+
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [notification])
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/screening/${deleteTarget.id}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json()
+      if (res.ok) {
+        setNotification({ type: 'success', message: `Data skrining atas nama ${deleteTarget.nama_peserta} berhasil dihapus.` })
+        setData(prev => prev.filter(item => item.id !== deleteTarget.id))
+        setTotal(prev => Math.max(0, prev - 1))
+        setDeleteTarget(null)
+      } else {
+        setNotification({ type: 'error', message: json.error || 'Gagal menghapus data' })
+      }
+    } catch {
+      setNotification({ type: 'error', message: 'Terjadi kesalahan saat menghapus data' })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const filtered = search
     ? data.filter(d =>
@@ -70,6 +103,28 @@ export default function AdminDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Notification Toast */}
+        {notification && (
+          <div
+            className={`mb-5 p-4 rounded-xl text-sm flex items-center justify-between shadow-sm border ${
+              notification.type === 'success'
+                ? 'bg-green-50 text-green-800 border-green-200'
+                : 'bg-red-50 text-red-800 border-red-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span>{notification.type === 'success' ? '✅' : '⚠️'}</span>
+              <span className="font-medium">{notification.message}</span>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="text-gray-400 hover:text-gray-600 text-xs font-bold ml-4 p-1"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {(['all', 'pending', 'approved', 'submitted'] as const).map(s => (
@@ -156,12 +211,23 @@ export default function AdminDashboard() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <Link
-                          href={`/admin/dashboard/${row.id}`}
-                          className="text-blue-600 hover:text-blue-800 font-medium text-xs underline"
-                        >
-                          Detail →
-                        </Link>
+                        <div className="flex items-center gap-2.5">
+                          <Link
+                            href={`/admin/dashboard/${row.id}`}
+                            className="text-blue-600 hover:text-blue-800 font-medium text-xs underline"
+                          >
+                            Detail →
+                          </Link>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(row)}
+                            className="text-red-600 hover:text-red-800 font-medium text-xs hover:underline flex items-center gap-1 transition"
+                            title="Hapus data"
+                          >
+                            🗑️ Hapus
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -196,6 +262,49 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* Modal Konfirmasi Hapus */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="text-lg font-bold text-gray-900">Konfirmasi Hapus Data</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">
+              Apakah Anda yakin ingin menghapus data skrining peserta berikut?
+            </p>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 my-3 text-sm">
+              <p className="font-semibold text-gray-900">{deleteTarget.nama_peserta}</p>
+              <p className="text-gray-500 font-mono text-xs mt-1">NIK: {deleteTarget.nik}</p>
+              <p className="text-gray-500 text-xs mt-1">
+                Tgl Skrining: {new Date(deleteTarget.tanggal_skrining || deleteTarget.created_at).toLocaleDateString('id-ID')}
+              </p>
+            </div>
+            <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded-lg mb-6 border border-red-100">
+              ⚠️ Peringatan: Tindakan ini bersifat permanen. Data yang telah dihapus tidak dapat dipulihkan kembali.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {isDeleting ? '⏳ Menghapus...' : '🗑️ Ya, Hapus Data'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

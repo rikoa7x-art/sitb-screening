@@ -56,3 +56,29 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    if (!id) {
+      return NextResponse.json({ error: 'ID tidak valid' }, { status: 400 })
+    }
+
+    const db = supabaseAdmin()
+    const { error } = await db
+      .from('screenings')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('Delete error:', error)
+      return NextResponse.json({ error: 'Gagal menghapus data' }, { status: 500 })
+    }
+
+    return NextResponse.json({ message: 'Data berhasil dihapus' }, { status: 200 })
+  } catch (err) {
+    console.error('API error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+

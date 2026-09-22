@@ -25,6 +25,9 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
   const [catatan, setCatatan] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -57,6 +60,26 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
     }
   }
 
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    setDeleteError('')
+    try {
+      const res = await fetch(`/api/screening/${id}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json()
+      if (res.ok) {
+        router.push('/admin/dashboard')
+      } else {
+        setDeleteError(json.error || 'Gagal menghapus data')
+      }
+    } catch {
+      setDeleteError('Terjadi kesalahan saat menghapus data')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (loading) return <div className="p-8 text-center text-gray-400">⏳ Memuat data...</div>
   if (!data) return <div className="p-8 text-center text-red-500">Data tidak ditemukan</div>
 
@@ -64,20 +87,30 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => router.back()} className="text-blue-600 hover:text-blue-800 text-sm">
-            ← Kembali
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="text-blue-600 hover:text-blue-800 text-sm">
+              ← Kembali
+            </button>
+            <h1 className="text-xl font-bold text-gray-900">Detail Skrining</h1>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium
+              ${data.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                data.status === 'approved' ? 'bg-green-100 text-green-700' :
+                data.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                'bg-blue-100 text-blue-700'}`}>
+              {data.status === 'pending' ? '⏳ Menunggu Review' :
+               data.status === 'approved' ? '✅ Disetujui' :
+               data.status === 'rejected' ? '❌ Ditolak' : '🚀 Terkirim ke SITB'}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { setDeleteError(''); setShowDeleteModal(true) }}
+            className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 hover:border-red-300 transition"
+          >
+            🗑️ Hapus Data
           </button>
-          <h1 className="text-xl font-bold text-gray-900">Detail Skrining</h1>
-          <span className={`px-3 py-1 rounded-full text-xs font-medium
-            ${data.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-              data.status === 'approved' ? 'bg-green-100 text-green-700' :
-              data.status === 'rejected' ? 'bg-red-100 text-red-700' :
-              'bg-blue-100 text-blue-700'}`}>
-            {data.status === 'pending' ? '⏳ Menunggu Review' :
-             data.status === 'approved' ? '✅ Disetujui' :
-             data.status === 'rejected' ? '❌ Ditolak' : '🚀 Terkirim ke SITB'}
-          </span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -204,9 +237,72 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
                 </p>
               </div>
             )}
+
+            {/* Danger Zone */}
+            <div className="bg-white rounded-xl shadow-sm border border-red-100 p-5">
+              <h2 className="font-bold text-red-700 text-sm mb-1">🗑️ Hapus Data Skrining</h2>
+              <p className="text-xs text-gray-500 mb-3">
+                Hapus rekaman data ini secara permanen dari sistem.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setDeleteError(''); setShowDeleteModal(true) }}
+                className="w-full border border-red-200 text-red-600 py-2 rounded-lg text-xs font-medium hover:bg-red-50 hover:border-red-300 transition"
+              >
+                Hapus Data Ini
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Modal Konfirmasi Hapus */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="text-lg font-bold text-gray-900">Konfirmasi Hapus Data</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">
+              Apakah Anda yakin ingin menghapus data skrining peserta berikut?
+            </p>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 my-3 text-sm">
+              <p className="font-semibold text-gray-900">{data.nama_peserta}</p>
+              <p className="text-gray-500 font-mono text-xs mt-1">NIK: {data.nik}</p>
+              <p className="text-gray-500 text-xs mt-1">
+                Tgl Skrining: {new Date(data.tanggal_skrining || data.created_at).toLocaleDateString('id-ID')}
+              </p>
+            </div>
+            {deleteError && (
+              <div className="p-2.5 rounded-lg bg-red-50 text-red-700 text-xs mb-3 border border-red-200">
+                ⚠️ {deleteError}
+              </div>
+            )}
+            <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded-lg mb-6 border border-red-100">
+              ⚠️ Peringatan: Tindakan ini bersifat permanen. Data yang telah dihapus tidak dapat dipulihkan kembali.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {isDeleting ? '⏳ Menghapus...' : '🗑️ Ya, Hapus Data'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
