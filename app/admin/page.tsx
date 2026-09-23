@@ -19,16 +19,17 @@ export default function AdminLoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
+        // credentials: 'include' agar browser menyimpan HttpOnly cookie dari response
+        credentials: 'include',
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
-      
-      // Simpan token di localStorage
-      localStorage.setItem('admin_token', json.token)
-      localStorage.setItem('admin_email', json.user)
+
+      // Token disimpan server-side sebagai HttpOnly cookie.
+      // Tidak ada lagi token di localStorage.
       router.push('/admin/dashboard')
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Terjadi kesalahan')
     } finally {
       setLoading(false)
     }

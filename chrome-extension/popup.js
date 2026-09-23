@@ -83,7 +83,8 @@ async function fillForm(patientData) {
   }
 }
 
-// Update status di Supabase menjadi "submitted"
+// Update status ke "submitted" via backend proxy (bukan langsung ke Supabase)
+// Ini mencegah Service Role Key bocor ke browser
 async function markDone(id) {
   if (!confirm('Tandai data ini sebagai selesai diinput ke SITB?')) return;
   
@@ -91,19 +92,19 @@ async function markDone(id) {
   btn.innerText = '⏳...';
   
   try {
-    await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/screenings?id=eq.${id}`, {
+    const res = await fetch(`${CONFIG.APP_URL}/api/extension/mark-submitted`, {
       method: 'PATCH',
       headers: {
-        'apikey': CONFIG.SUPABASE_KEY,
-        'Authorization': `Bearer ${CONFIG.SUPABASE_KEY}`,
         'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
+        'X-Extension-Key': CONFIG.EXTENSION_SECRET_KEY,
       },
-      body: JSON.stringify({ 
-        status: 'submitted',
-        submitted_at: new Date().toISOString()
-      })
+      body: JSON.stringify({ id }),
     });
+
+    if (!res.ok) {
+      const json = await res.json();
+      throw new Error(json.error || 'Gagal update status');
+    }
     
     fetchData(); // Refresh list
   } catch (err) {

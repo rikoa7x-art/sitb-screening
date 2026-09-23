@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { Screening, ScreeningStatus } from '@/lib/supabase'
 
 const STATUS_CONFIG: Record<ScreeningStatus, { label: string; color: string; bg: string }> = {
@@ -21,6 +22,12 @@ export default function AdminDashboard() {
   const [deleteTarget, setDeleteTarget] = useState<Screening | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' })
+    router.push('/admin')
+  }
 
   const fetchData = async () => {
     setLoading(true)
@@ -97,6 +104,12 @@ export default function AdminDashboard() {
               className="text-sm border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition"
             >
               🔄 Refresh
+            </button>
+            <button
+              onClick={handleLogout}
+              className="text-sm border border-red-200 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 transition"
+            >
+              🚪 Logout
             </button>
           </div>
         </div>

@@ -33,7 +33,7 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
   useEffect(() => {
     params.then(({ id: resolvedId }) => {
       setId(resolvedId)
-      fetch(`/api/screening/${resolvedId}`)
+      fetch(`/api/screening/${resolvedId}`, { credentials: 'include' })
         .then(r => r.json())
         .then(d => { setData(d); setCatatan(d.catatan_petugas || '') })
         .finally(() => setLoading(false))
@@ -46,6 +46,7 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
       const res = await fetch(`/api/screening/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ action, catatan_petugas: catatan, approved_by: 'Petugas Puskesmas' }),
       })
       const json = await res.json()
@@ -66,6 +67,7 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
     try {
       const res = await fetch(`/api/screening/${id}`, {
         method: 'DELETE',
+        credentials: 'include',
       })
       const json = await res.json()
       if (res.ok) {

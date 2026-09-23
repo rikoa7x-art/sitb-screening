@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { verifyAdmin } from '@/lib/auth'
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// Semua handler di file ini diproteksi middleware.ts,
+// tapi verifyAdmin() juga dipanggil sebagai lapisan pertahanan kedua (defence-in-depth).
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!await verifyAdmin(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   try {
     const { id } = await params
     const db = supabaseAdmin()
@@ -22,6 +29,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!await verifyAdmin(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   try {
     const { id } = await params
     const body = await req.json()
@@ -57,7 +67,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!await verifyAdmin(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   try {
     const { id } = await params
     if (!id) {
@@ -81,4 +94,3 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-
