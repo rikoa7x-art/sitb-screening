@@ -99,27 +99,31 @@ export default function ScreeningForm() {
     <FormProvider {...methods}>
       <div className="max-w-2xl mx-auto">
         {/* Progress Steps */}
-        <div className="flex items-center mb-8">
+        <div className="flex items-center mb-5 sm:mb-8">
           {STEPS.map((s, i) => (
             <div key={i} className="flex items-center flex-1">
               <div className={`flex flex-col items-center ${i <= step ? 'text-blue-600' : 'text-gray-400'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold border-2 transition-all
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-base sm:text-lg font-bold border-2 transition-all
                   ${i < step ? 'bg-blue-600 border-blue-600 text-white' :
                     i === step ? 'border-blue-600 bg-white text-blue-600' :
                     'border-gray-300 bg-white text-gray-400'}`}>
                   {i < step ? '✓' : s.icon}
                 </div>
-                <span className="text-xs mt-1 font-medium">{s.label}</span>
+                {/* Label: selalu tampil di sm ke atas, di mobile hanya tampil untuk step aktif */}
+                <span className={`text-xs mt-1 font-medium leading-tight text-center
+                  ${i === step ? 'block' : 'hidden sm:block'}`}>
+                  {s.label}
+                </span>
               </div>
               {i < STEPS.length - 1 && (
-                <div className={`flex-1 h-1 mx-2 rounded transition-all ${i < step ? 'bg-blue-600' : 'bg-gray-200'}`} />
+                <div className={`flex-1 h-1 mx-1 sm:mx-2 rounded transition-all ${i < step ? 'bg-blue-600' : 'bg-gray-200'}`} />
               )}
             </div>
           ))}
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8">
+        <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6 md:p-8">
           <form onSubmit={handleSubmit(onSubmit as any)}>
             {step === 0 && <Step1Identitas />}
             {step === 1 && <Step2Alamat />}
@@ -133,22 +137,22 @@ export default function ScreeningForm() {
             )}
 
             {/* Navigation Buttons */}
-            <div className="flex justify-between mt-8 pt-4 border-t border-gray-100">
+            <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
               {step > 0 ? (
                 <button
                   type="button"
                   onClick={prevStep}
-                  className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition"
+                  className="flex-1 sm:flex-none px-5 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition text-sm sm:text-base active:bg-gray-100"
                 >
                   ← Kembali
                 </button>
-              ) : <div />}
+              ) : <div className="flex-1 sm:flex-none" />}
 
               {step < STEPS.length - 1 ? (
                 <button
                   type="button"
                   onClick={nextStep}
-                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition"
+                  className="flex-1 sm:flex-none px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition text-sm sm:text-base active:bg-blue-800"
                 >
                   Selanjutnya →
                 </button>
@@ -156,7 +160,7 @@ export default function ScreeningForm() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-8 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="flex-1 sm:flex-none px-5 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium transition text-sm sm:text-base disabled:opacity-60 disabled:cursor-not-allowed active:bg-green-800"
                 >
                   {loading ? '⏳ Menyimpan...' : '✅ Kirim Data Skrining'}
                 </button>
