@@ -22,7 +22,7 @@ export default function SuccessPage({ searchParams }: { searchParams: { id?: str
         )}
 
         <div className="space-y-2 text-sm text-gray-500 mb-8">
-          <p>📞 Pertanyaan? Hubungi: <strong>(022) xxx-xxxx</strong></p>
+          <p>📞 Pertanyaan? Hubungi: <strong>082119120636</strong></p>
           <p>🕐 Peninjauan dalam 1×24 jam kerja</p>
         </div>
 
