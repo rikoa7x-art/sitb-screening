@@ -21,6 +21,14 @@
     .btn-diag:hover { background: #6d28d9; }
     .empty { text-align: center; padding: 20px; color: #94a3b8; font-size: 13px; }
     .info { font-size: 11px; color: #ef4444; margin-bottom: 12px; background: #fef2f2; padding: 8px; border-radius: 6px; border: 1px solid #fecaca; }
+    .search-wrap { position: relative; margin-bottom: 10px; }
+    .search-wrap .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 14px; pointer-events: none; }
+    #search-input { width: 100%; box-sizing: border-box; padding: 8px 32px 8px 32px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; color: #334155; outline: none; transition: border-color 0.2s; background: white; }
+    #search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+    #search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 15px; padding: 0; line-height: 1; display: none; flex: none; width: auto; }
+    #search-clear:hover { color: #ef4444; }
+    .highlight { background: #fef9c3; border-radius: 2px; }
+    .result-count { font-size: 11px; color: #64748b; margin-bottom: 8px; text-align: right; }
   </style>
 </head>
 <body>
@@ -30,6 +38,12 @@
   <div class="content">
     <div class="info">⚠️ Buka halaman form di SITB Kemenkes terlebih dahulu sebelum klik "Isi Form".</div>
     <button class="btn-diag" id="btn-diagnostic">🔍 Jalankan Diagnostik Form</button>
+    <div class="search-wrap">
+      <span class="search-icon">🔎</span>
+      <input type="text" id="search-input" placeholder="Cari nama atau NIK pasien..." autocomplete="off" />
+      <button id="search-clear" title="Hapus pencarian">✕</button>
+    </div>
+    <div id="result-count" class="result-count" style="display:none;"></div>
     <div id="loading" class="loader">Memuat data skrining...</div>
     <div id="list"></div>
   </div>

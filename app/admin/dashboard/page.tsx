@@ -190,7 +190,7 @@ export default function AdminDashboard() {
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Tanggal</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">NIK</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Nama Peserta</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Hasil Skrining</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-600">Alamat Peserta</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Status</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-600">Aksi</th>
                 </tr>
@@ -217,7 +217,7 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-4 py-3 font-mono text-gray-700">{row.nik}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">{row.nama_peserta}</td>
-                      <td className="px-4 py-3 text-gray-600">{row.hasil_skrining}</td>
+                      <td className="px-4 py-3 text-gray-600">{row.alamat_ktp}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${cfg.bg} ${cfg.color}`}>
                           {cfg.label}
