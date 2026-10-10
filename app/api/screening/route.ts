@@ -107,6 +107,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status')
+    const kelurahan = searchParams.get('kelurahan')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = 20
     const offset = (page - 1) * limit
@@ -120,6 +121,10 @@ export async function GET(req: NextRequest) {
 
     if (status && status !== 'all') {
       query = query.eq('status', status)
+    }
+
+    if (kelurahan && kelurahan !== 'all') {
+      query = query.eq('kelurahan_ktp', kelurahan)
     }
 
     const { data, error, count } = await query

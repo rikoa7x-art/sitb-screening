@@ -16,6 +16,8 @@ export default function AdminDashboard() {
   const [data, setData] = useState<Screening[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [kelurahanFilter, setKelurahanFilter] = useState('all')
+  const [desaList, setDesaList] = useState<string[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
@@ -35,6 +37,7 @@ export default function AdminDashboard() {
       const params = new URLSearchParams({
         status: statusFilter,
         page: page.toString(),
+        kelurahan: kelurahanFilter,
       })
       const res = await fetch(`/api/screening?${params}`)
       const json = await res.json()
@@ -47,7 +50,21 @@ export default function AdminDashboard() {
     }
   }
 
-  useEffect(() => { fetchData() }, [statusFilter, page])
+  const fetchDesaList = async () => {
+    try {
+      // Ambil semua data tanpa filter untuk mendapatkan daftar desa unik
+      const res = await fetch('/api/screening/desa-list')
+      if (res.ok) {
+        const json = await res.json()
+        setDesaList(json.desa || [])
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  useEffect(() => { fetchDesaList() }, [])
+  useEffect(() => { fetchData() }, [statusFilter, kelurahanFilter, page])
 
   useEffect(() => {
     if (notification) {
@@ -178,7 +195,30 @@ export default function AdminDashboard() {
               <option value="rejected">Ditolak</option>
               <option value="submitted">Terkirim ke SITB</option>
             </select>
+            <select
+              value={kelurahanFilter}
+              onChange={e => { setKelurahanFilter(e.target.value); setPage(1) }}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+            >
+              <option value="all">🏘️ Semua Desa</option>
+              {desaList.map(desa => (
+                <option key={desa} value={desa}>{desa}</option>
+              ))}
+            </select>
           </div>
+          {kelurahanFilter !== 'all' && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-2.5 py-0.5 font-medium">
+                🏘️ Desa: {kelurahanFilter}
+              </span>
+              <button
+                onClick={() => { setKelurahanFilter('all'); setPage(1) }}
+                className="text-xs text-gray-400 hover:text-gray-600 underline"
+              >
+                ✕ Hapus filter
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Table */}
