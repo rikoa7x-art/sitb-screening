@@ -1,14 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Lazy getter — tidak diinisialisasi di module level agar tidak crash saat build
+// jika environment variables belum tersedia (misal di Vercel build time)
+export const supabase = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  return createClient(url, anonKey)
+}
 
 // Server-side client dengan service role (untuk admin API routes)
 export const supabaseAdmin = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  return createClient(supabaseUrl, serviceKey)
+  return createClient(url, serviceKey)
 }
 
 export type ScreeningStatus = 'pending' | 'approved' | 'rejected' | 'submitted'
